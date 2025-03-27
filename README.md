@@ -133,10 +133,17 @@ Run the script for inference:
 
 You can change the parameters `inference_steps` and `guidance_scale` to see more results.
 
-```markdown
 ## 🚀 API Server
 
-In addition to the Gradio app and command-line inference, you can also run an API server that processes your video and audio files and returns the resulting lip-synced video. This server is built using FastAPI.
+In addition to the Gradio app and command-line inference, you can also run an API server that processes your video and audio files and returns the resulting lip-synced video. This server is built using FastAPI and supports asynchronous task processing with a queue system.
+
+### Features
+
+- Process multiple incoming requests via a task queue
+- Handle tasks sequentially to optimize resource usage 
+- Track task status with unique identifiers
+- Cancel pending tasks if needed
+- Monitor queue status and task progress
 
 ### Setup
 
@@ -156,31 +163,97 @@ python api_server.py
 
 The server will start and listen on [http://0.0.0.0:8000](http://0.0.0.0:8000).
 
-### Calling the API
+### API Endpoints
 
-On Windows (using PowerShell), use the following one-line `curl` command (make sure to use `curl.exe` so that it doesn't alias to PowerShell's `Invoke-WebRequest`):
+#### Submit Processing Task
 
 ```bash
-curl.exe -X POST "http://<your-server-ip>:<port>/process/" -F "video=@<path-to-your-video>.mp4" -F "audio=@<path-to-your-audio>.wav" -F "inference_steps=20" -F "guidance_scale=1" --output output_video.mp4
+POST /process/
+```
+
+Submit a video and audio file for processing. The task will be queued and processed when resources are available.
+
+**Returns**: A task ID for tracking the status of your request.
+
+#### Check Task Status
+
+```bash
+GET /task/{task_id}
+```
+
+Check the status of a specific task (pending, processing, completed, failed, or canceled).
+
+**Returns**: Current status and download URL if completed.
+
+#### Cancel Task
+
+```bash
+DELETE /task/{task_id}
+```
+
+Cancel a pending or processing task.
+
+**Returns**: Success or failure message.
+
+#### View Queue Status
+
+```bash
+GET /queue
+```
+
+Get an overview of all tasks in the queue.
+
+**Returns**: Lists of pending, processing, and recently completed tasks.
+
+#### Download Processed Video
+
+```bash
+GET /download/{task_id}
+```
+
+Download the processed video for a completed task.
+
+**Returns**: The processed video file.
+
+### Example Usage
+
+#### Submit a processing job:
+
+On Windows (using PowerShell):
+
+```bash
+curl.exe -X POST "http://<your-server-ip>:<port>/process/" -F "video=@<path-to-your-video>.mp4" -F "audio=@<path-to-your-audio>.wav" -F "inference_steps=20" -F "guidance_scale=1"
 ```
 
 On Linux:
 
 ```bash
-curl -X POST "http://<your-server-ip>:<port>/process/" -F "video=@<path-to-your-video>.mp4" -F "audio=@<path-to-your-audio>.wav" -F "inference_steps=20" -F "guidance_scale=1" --output output_video.mp4
+curl -X POST "http://<your-server-ip>:<port>/process/" -F "video=@<path-to-your-video>.mp4" -F "audio=@<path-to-your-audio>.wav" -F "inference_steps=20" -F "guidance_scale=1"
 ```
 
-Replace the file paths as needed. This command uploads your input video and audio, runs the processing, and saves the resulting video as `output_video.mp4`.
+This will return a task ID like:
+```
+{
+  "task_id": "12345678-1234-5678-1234-567812345678",
+  "message": "Task added to queue"
+}
+```
+
+#### Check task status:
+
+```bash
+curl "http://<your-server-ip>:<port>/task/12345678-1234-5678-1234-567812345678"
+```
+
+#### Download the completed video:
+
+```bash
+curl "http://<your-server-ip>:<port>/download/12345678-1234-5678-1234-567812345678" --output output_video.mp4
+```
 
 ### Test Connection
 
 To verify that the API server is running correctly and can serve files, you can run the following test command:
-
-```bash
-curl.exe "http://<your-server-ip>:<port>/test-save/" --output dummy_test_video.mp4
-```
-
-On Linux:
 
 ```bash
 curl "http://<your-server-ip>:<port>/test-save/" --output dummy_test_video.mp4
