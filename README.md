@@ -161,17 +161,32 @@ The server will start and listen on [http://0.0.0.0:8000](http://0.0.0.0:8000).
 On Windows (using PowerShell), use the following one-line `curl` command (make sure to use `curl.exe` so that it doesn't alias to PowerShell's `Invoke-WebRequest`):
 
 ```bash
-curl.exe -X POST "http://localhost:8000/process/" -F "video=@X:\Github_repo\LatentSync\assets\demo1_video.mp4" -F "audio=@X:\Github_repo\LatentSync\assets\demo1_audio.wav" -F "inference_steps=20" -F "guidance_scale=1.5" --output output_video.mp4
+curl.exe -X POST "http://<your-server-ip>:<port>/process/" -F "video=@<path-to-your-video>.mp4" -F "audio=@<path-to-your-audio>.wav" -F "inference_steps=20" -F "guidance_scale=1" --output output_video.mp4
 ```
 
 On Linux:
 
 ```bash
-curl -X POST "http://localhost:8000/process/" -F "video=@X:\Github_repo\LatentSync\assets\demo1_video.mp4" -F "audio=@X:\Github_repo\LatentSync\assets\demo1_audio.wav" -F "inference_steps=20" -F "guidance_scale=1.5" --output output_video.mp4
+curl -X POST "http://<your-server-ip>:<port>/process/" -F "video=@<path-to-your-video>.mp4" -F "audio=@<path-to-your-audio>.wav" -F "inference_steps=20" -F "guidance_scale=1" --output output_video.mp4
 ```
 
 Replace the file paths as needed. This command uploads your input video and audio, runs the processing, and saves the resulting video as `output_video.mp4`.
 
+### Test Connection
+
+To verify that the API server is running correctly and can serve files, you can run the following test command:
+
+```bash
+curl.exe "http://<your-server-ip>:<port>/test-save/" --output dummy_test_video.mp4
+```
+
+On Linux:
+
+```bash
+curl "http://<your-server-ip>:<port>/test-save/" --output dummy_test_video.mp4
+```
+
+This will download a small dummy video file named `dummy_test_video.mp4` if everything is set up properly.
 
 ## 🔄 Data Processing Pipeline
 
