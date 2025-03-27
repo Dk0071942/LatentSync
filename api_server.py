@@ -2,12 +2,16 @@ import os
 import uuid
 import tempfile
 import argparse
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import JSONResponse, StreamingResponse
 from omegaconf import OmegaConf
 from scripts.inference import main
 
 app = FastAPI()
+
+# Define an output directory (inside the system temp directory) to store generated videos.
+OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "latentsync_outputs")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 @app.post("/process/")
 async def process_video(
@@ -17,21 +21,24 @@ async def process_video(
     guidance_scale: float = Form(1.0),
     seed: int = Form(1247)
 ):
-    # Use the system's temporary directory (works on Windows too)
+    # Use the system's temporary directory for input files.
     temp_dir = tempfile.gettempdir()
     video_path = os.path.join(temp_dir, f"{uuid.uuid4()}_{video.filename}")
     audio_path = os.path.join(temp_dir, f"{uuid.uuid4()}_{audio.filename}")
-    output_video_path = os.path.join(temp_dir, f"{uuid.uuid4()}_output.mp4")
     
-    # Save uploaded files
+    # Use the persistent output directory for the generated video.
+    output_filename = f"{uuid.uuid4()}_output.mp4"
+    output_video_path = os.path.join(OUTPUT_DIR, output_filename)
+    
+    # Save the uploaded video and audio files.
     with open(video_path, "wb") as f:
         f.write(await video.read())
     with open(audio_path, "wb") as f:
         f.write(await audio.read())
     
-    # Build a minimal argparse.Namespace to pass parameters to your inference main() function
+    # Build an argparse.Namespace as expected by your inference main() function.
     args = argparse.Namespace(
-        unet_config_path="configs/unet/stage2.yaml",  # adjust as needed
+        unet_config_path="configs/unet/stage2.yaml",  # adjust if needed
         inference_ckpt_path="checkpoints/latentsync_unet.pt",
         video_path=video_path,
         audio_path=audio_path,
@@ -43,15 +50,30 @@ async def process_video(
     
     config = OmegaConf.load(args.unet_config_path)
     
-    # Call the existing inference function
+    # Call the inference function.
     main(config, args)
     
-    # Optionally remove temporary input files
+    # Clean up the temporary input files.
     os.remove(video_path)
     os.remove(audio_path)
     
-    # Return the output video
-    return FileResponse(output_video_path, media_type="video/mp4", filename="output_video.mp4")
+    # Return a JSON response with a download URL.
+    return JSONResponse({"download_url": f"/download/{output_filename}"})
+
+@app.get("/download/{filename}")
+async def download_file(filename: str):
+    file_path = os.path.join(OUTPUT_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Stream the file in chunks.
+    def iterfile():
+        with open(file_path, "rb") as f:
+            while chunk := f.read(8192):
+                yield chunk
+    
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return StreamingResponse(iterfile(), media_type="video/mp4", headers=headers)
 
 if __name__ == "__main__":
     import uvicorn
