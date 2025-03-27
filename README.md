@@ -133,6 +133,46 @@ Run the script for inference:
 
 You can change the parameters `inference_steps` and `guidance_scale` to see more results.
 
+```markdown
+## 🚀 API Server
+
+In addition to the Gradio app and command-line inference, you can also run an API server that processes your video and audio files and returns the resulting lip-synced video. This server is built using FastAPI.
+
+### Setup
+
+First, install the required dependencies for the API server:
+
+```bash
+pip install fastapi uvicorn python-multipart
+```
+
+### Launching the API Server
+
+Run the following command to start the server:
+
+```bash
+python api_server.py
+```
+
+The server will start and listen on [http://0.0.0.0:8000](http://0.0.0.0:8000).
+
+### Calling the API
+
+On Windows (using PowerShell), use the following one-line `curl` command (make sure to use `curl.exe` so that it doesn't alias to PowerShell's `Invoke-WebRequest`):
+
+```bash
+curl.exe -X POST "http://localhost:8000/process/" -F "video=@X:\Github_repo\LatentSync\assets\demo1_video.mp4" -F "audio=@X:\Github_repo\LatentSync\assets\demo1_audio.wav" -F "inference_steps=20" -F "guidance_scale=1.5" --output output_video.mp4
+```
+
+On Linux:
+
+```bash
+curl -X POST "http://localhost:8000/process/" -F "video=@X:\Github_repo\LatentSync\assets\demo1_video.mp4" -F "audio=@X:\Github_repo\LatentSync\assets\demo1_audio.wav" -F "inference_steps=20" -F "guidance_scale=1.5" --output output_video.mp4
+```
+
+Replace the file paths as needed. This command uploads your input video and audio, runs the processing, and saves the resulting video as `output_video.mp4`.
+
+
 ## 🔄 Data Processing Pipeline
 
 The complete data processing pipeline includes the following steps:
