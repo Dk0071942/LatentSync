@@ -50,3 +50,5 @@ wandb/
 !/internal/*.png
 
 input_files/
+
+temp_synced_frames.dat

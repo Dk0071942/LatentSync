@@ -264,21 +264,37 @@ class LipsyncPipeline(DiffusionPipeline):
         return faces, boxes, affine_matrices
 
     def restore_video(self, faces, video_frames, boxes, affine_matrices):
+        # Ensure we only process as many frames as there are faces.
         video_frames = video_frames[: faces.shape[0]]
-        out_frames = []
-        print(f"Restoring {len(faces)} faces...")
+        
+        # Determine the output frame shape from the first video frame.
+        frame_height, frame_width, channels = video_frames[0].shape
+        n_frames = faces.shape[0]
+        
+        # Create a memmap file to store the restored frames on disk.
+        memmap_filename = "temp_synced_frames.dat"
+        out_frames = np.memmap(memmap_filename, dtype=np.uint8, mode='w+', shape=(n_frames, frame_height, frame_width, channels))
+        
+        print(f"Restoring {n_frames} faces...")
         for index, face in enumerate(tqdm.tqdm(faces)):
             x1, y1, x2, y2 = boxes[index]
             height = int(y2 - y1)
             width = int(x2 - x1)
-            face = torchvision.transforms.functional.resize(face, size=(height, width), antialias=True)
-            face = rearrange(face, "c h w -> h w c")
-            face = (face / 2 + 0.5).clamp(0, 1)
-            face = (face * 255).to(torch.uint8).cpu().numpy()
-            # face = cv2.resize(face, (width, height), interpolation=cv2.INTER_LANCZOS4)
-            out_frame = self.image_processor.restorer.restore_img(video_frames[index], face, affine_matrices[index])
-            out_frames.append(out_frame)
-        return np.stack(out_frames, axis=0)
+            # Resize the face to match the detected face region.
+            face_resized = torchvision.transforms.functional.resize(face, size=(height, width), antialias=True)
+            face_resized = rearrange(face_resized, "c h w -> h w c")
+            face_resized = (face_resized / 2 + 0.5).clamp(0, 1)
+            face_resized = (face_resized * 255).to(torch.uint8).cpu().numpy()
+            
+            # Restore the processed face back to the full video frame.
+            out_frame = self.image_processor.restorer.restore_img(video_frames[index], face_resized, affine_matrices[index])
+            
+            # Write the restored frame into the memmap array.
+            out_frames[index] = out_frame
+        
+        # Flush changes to disk.
+        out_frames.flush()
+        return out_frames
 
     @torch.no_grad()
     def __call__(
