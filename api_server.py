@@ -132,146 +132,152 @@ class QueueManager:
             raise HTTPException(status_code=404, detail="Task not found")
         return self.tasks[task_id]
 
-# Initialize queue manager
-queue_manager = QueueManager()
+def create_app() -> FastAPI:
+    app = FastAPI()
 
-@app.on_event("startup")
-async def startup_event():
-    # Start the background worker
-    asyncio.create_task(queue_manager.start_worker())
+    # Initialize queue manager
+    app.state.queue_manager = QueueManager()
 
-@app.post("/process/")
-async def process_video(
-    video: UploadFile = File(...),
-    audio: UploadFile = File(...),
-    inference_steps: int = Form(20),
-    guidance_scale: float = Form(1.0),
-    seed: int = Form(1247)
-):
-    # Save the uploaded video and audio files
-    video_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{video.filename}")
-    audio_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{audio.filename}")
-    output_video_path = os.path.join(OUTPUT_DIR, f"{uuid.uuid4()}_output.mp4")
+    @app.on_event("startup")
+    async def startup_event():
+        # Start the background worker
+        asyncio.create_task(app.state.queue_manager.start_worker())
 
-    try:
-        video_content = await video.read()
-        with open(video_path, "wb") as f:
-            f.write(video_content)
-        audio_content = await audio.read()
-        with open(audio_path, "wb") as f:
-            f.write(audio_content)
+    @app.post("/process/")
+    async def process_video(
+        video: UploadFile = File(...),
+        audio: UploadFile = File(...),
+        inference_steps: int = Form(20),
+        guidance_scale: float = Form(1.0),
+        seed: int = Form(1247)
+    ):
+        # Save the uploaded video and audio files
+        video_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{video.filename}")
+        audio_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{audio.filename}")
+        output_video_path = os.path.join(OUTPUT_DIR, f"{uuid.uuid4()}_output.mp4")
 
-        # Build arguments for the inference process
-        args = argparse.Namespace(
-            unet_config_path="configs/unet/stage2.yaml",
-            inference_ckpt_path="checkpoints/latentsync_unet.pt",
-            video_path=video_path,
-            audio_path=audio_path,
-            video_out_path=output_video_path,
-            inference_steps=inference_steps,
-            guidance_scale=guidance_scale,
-            seed=seed,
-        )
+        try:
+            video_content = await video.read()
+            with open(video_path, "wb") as f:
+                f.write(video_content)
+            audio_content = await audio.read()
+            with open(audio_path, "wb") as f:
+                f.write(audio_content)
 
-        # Create task data
-        task_data = {
-            "video_path": video_path,
-            "audio_path": audio_path,
-            "output_video_path": output_video_path,
-            "args": args
-        }
-        
-        # Add to processing queue
-        task_id = await queue_manager.add_task(task_data)
-        
-        return {"task_id": task_id, "message": "Task added to queue"}
+            # Build arguments for the inference process
+            args = argparse.Namespace(
+                unet_config_path="configs/unet/stage2.yaml",
+                inference_ckpt_path="checkpoints/latentsync_unet.pt",
+                video_path=video_path,
+                audio_path=audio_path,
+                video_out_path=output_video_path,
+                inference_steps=inference_steps,
+                guidance_scale=guidance_scale,
+                seed=seed,
+            )
 
-    except Exception as e:
-        # Cleanup any files created if something goes wrong
-        for path in [video_path, audio_path]:
-            if os.path.exists(path):
-                os.remove(path)
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/task/{task_id}")
-async def get_task_status(task_id: str):
-    try:
-        task_info = queue_manager.get_task_status(task_id)
-        
-        # If task is completed, prepare for file download
-        if task_info["status"] == TaskStatus.COMPLETED:
-            return {
-                "status": task_info["status"],
-                "download_url": f"/download/{task_id}"
+            # Create task data
+            task_data = {
+                "video_path": video_path,
+                "audio_path": audio_path,
+                "output_video_path": output_video_path,
+                "args": args
             }
-        
-        return {"status": task_info["status"]}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/task/{task_id}")
-async def cancel_task(task_id: str):
-    try:
-        result = queue_manager.cancel_task(task_id)
-        if result:
-            return {"message": "Task canceled successfully"}
-        else:
-            return {"message": "Task could not be canceled, it may have already completed"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/queue")
-async def get_queue_status():
-    return queue_manager.get_queue_status()
-
-@app.get("/download/{task_id}")
-async def download_result(task_id: str, background_tasks: BackgroundTasks):
-    task_info = queue_manager.get_task_status(task_id)
-    
-    if task_info["status"] != TaskStatus.COMPLETED:
-        raise HTTPException(status_code=400, detail="Task not completed yet")
-    
-    output_video_path = task_info["result"]
-    
-    if not os.path.exists(output_video_path):
-        raise HTTPException(status_code=404, detail="Output file not found")
-        
-    # Define a generator to stream the output file
-    def iterfile():
-        with open(output_video_path, "rb") as f:
-            yield from f
-
-    # Schedule cleanup of the output file after streaming
-    def cleanup():
-        time.sleep(5)
-        if os.path.exists(output_video_path):
-            os.remove(output_video_path)
             
-        # Also clean up the input files if they still exist
-        video_path = task_info["data"]["video_path"]
-        audio_path = task_info["data"]["audio_path"]
-        for path in [video_path, audio_path]:
-            if os.path.exists(path):
-                os.remove(path)
+            # Add to processing queue
+            task_id = await app.state.queue_manager.add_task(task_data)
+            
+            return {"task_id": task_id, "message": "Task added to queue"}
+
+        except Exception as e:
+            # Cleanup any files created if something goes wrong
+            for path in [video_path, audio_path]:
+                if os.path.exists(path):
+                    os.remove(path)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/task/{task_id}")
+    async def get_task_status(task_id: str):
+        try:
+            task_info = app.state.queue_manager.get_task_status(task_id)
+            
+            # If task is completed, prepare for file download
+            if task_info["status"] == TaskStatus.COMPLETED:
+                return {
+                    "status": task_info["status"],
+                    "download_url": f"/download/{task_id}"
+                }
+            
+            return {"status": task_info["status"]}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.delete("/task/{task_id}")
+    async def cancel_task(task_id: str):
+        try:
+            result = app.state.queue_manager.cancel_task(task_id)
+            if result:
+                return {"message": "Task canceled successfully"}
+            else:
+                return {"message": "Task could not be canceled, it may have already completed"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/queue")
+    async def get_queue_status():
+        return app.state.queue_manager.get_queue_status()
+
+    @app.get("/download/{task_id}")
+    async def download_result(task_id: str, background_tasks: BackgroundTasks):
+        task_info = app.state.queue_manager.get_task_status(task_id)
+        
+        if task_info["status"] != TaskStatus.COMPLETED:
+            raise HTTPException(status_code=400, detail="Task not completed yet")
+        
+        output_video_path = task_info["result"]
+        
+        if not os.path.exists(output_video_path):
+            raise HTTPException(status_code=404, detail="Output file not found")
+            
+        # Define a generator to stream the output file
+        def iterfile():
+            with open(output_video_path, "rb") as f:
+                yield from f
+
+        # Schedule cleanup of the output file after streaming
+        def cleanup():
+            time.sleep(5)
+            if os.path.exists(output_video_path):
+                os.remove(output_video_path)
                 
-    background_tasks.add_task(cleanup)
+            # Also clean up the input files if they still exist
+            video_path = task_info["data"]["video_path"]
+            audio_path = task_info["data"]["audio_path"]
+            for path in [video_path, audio_path]:
+                if os.path.exists(path):
+                    os.remove(path)
+                    
+        background_tasks.add_task(cleanup)
 
-    filename = f"processed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
-    headers = {"Content-Disposition": f"attachment; filename={filename}"}
-    return StreamingResponse(iterfile(), media_type="video/mp4", headers=headers)
+        filename = f"processed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
+        headers = {"Content-Disposition": f"attachment; filename={filename}"}
+        return StreamingResponse(iterfile(), media_type="video/mp4", headers=headers)
 
-# Modified test endpoint that returns a dummy file
-@app.get("/test-save/")
-async def test_save():
-    # Create a dummy file in memory (this is just sample data)
-    dummy_content = b"This is a dummy MP4 file content for testing."
-    dummy_stream = BytesIO(dummy_content)
-    headers = {"Content-Disposition": "attachment; filename=dummy_test_video.mp4"}
-    return StreamingResponse(dummy_stream, media_type="video/mp4", headers=headers)
+    # Modified test endpoint that returns a dummy file
+    @app.get("/test-save/")
+    async def test_save():
+        # Create a dummy file in memory (this is just sample data)
+        dummy_content = b"This is a dummy MP4 file content for testing."
+        dummy_stream = BytesIO(dummy_content)
+        headers = {"Content-Disposition": "attachment; filename=dummy_test_video.mp4"}
+        return StreamingResponse(dummy_stream, media_type="video/mp4", headers=headers)
+    
+    return app
 
 if __name__ == "__main__":
+    app = create_app()
     uvicorn.run(app, host="0.0.0.0", port=8000)
