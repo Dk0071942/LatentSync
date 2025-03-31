@@ -4,10 +4,10 @@ import time
 import argparse
 import asyncio
 from enum import Enum
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Depends
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from omegaconf import OmegaConf
 from scripts.inference import main
 import uvicorn
