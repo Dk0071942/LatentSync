@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b)](https://arxiv.org/abs/2412.09262)
+[![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b.svg?logo=arXiv)](https://arxiv.org/abs/2412.09262)
 [![arXiv](https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Model-yellow)](https://huggingface.co/ByteDance/LatentSync-1.5)
 [![arXiv](https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Space-yellow)](https://huggingface.co/spaces/fffiloni/LatentSync)
 <a href="https://replicate.com/lucataco/latentsync"><img src="https://replicate.com/lucataco/latentsync/badge" alt="Replicate"></a>
@@ -131,7 +131,10 @@ Run the script for inference:
 ./inference.sh
 ```
 
-You can change the parameters `inference_steps` and `guidance_scale` to see more results.
+You can try adjusting the following inference parameters to achieve better results:
+
+- `inference_steps` [20-50]: A higher value improves visual quality but slows down the generation speed.
+- `guidance_scale` [1.0-3.0]: A higher value improves lip-sync accuracy but may cause the video distortion or jitter.
 
 ## 🚀 API Server
 
@@ -283,9 +286,7 @@ You should change the parameter `input_dir` in the script to specify the data di
 
 ## 🏋️‍♂️ Training U-Net
 
-Before training, you must process the data as described above and download all the checkpoints. We released a pretrained SyncNet with 94% accuracy on both VoxCeleb2 and HDTF datasets for the supervision of U-Net training. Note that this SyncNet is trained on affine transformed videos, so when using or evaluating this SyncNet, you need to perform affine transformation on the video first (the code of affine transformation is included in the data processing pipeline).
-
-If all the preparations are complete, you can train the U-Net with the following script:
+Before training, you must process the data as described above and download all the checkpoints. We released a pretrained SyncNet with 94% accuracy on both VoxCeleb2 and HDTF datasets for the supervision of U-Net training. If all the preparations are complete, you can train the U-Net with the following script:
 
 ```bash
 ./train_unet.sh
@@ -297,7 +298,11 @@ We prepared three UNet configuration files in the ``configs/unet`` directory, ea
 - `stage2.yaml`: Stage2 training with optimal performance, requires **30 GB** VRAM.
 - `stage2_efficient.yaml`: Efficient Stage 2 training, requires **20 GB** VRAM. It may lead to slight degradation in visual quality and temporal consistency compared with `stage2.yaml`, suitable for users with consumer-grade GPUs, such as the RTX 3090.
 
-Also remember to change the parameters in U-Net config file to specify the data directory, checkpoint save path, and other training hyperparameters.
+Also remember to change the parameters in U-Net config file to specify the data directory, checkpoint save path, and other training hyperparameters. For convenience, we prepared a script for writing a data files list. Run the following command:
+
+```bash
+python -m tools.write_fileslist
+```
 
 ## 🏋️‍♂️ Training SyncNet
 
@@ -323,6 +328,8 @@ You can evaluate the accuracy of SyncNet on a dataset by running the following s
 ./eval/eval_syncnet_acc.sh
 ```
 
+Note that our released SyncNet is trained on data processed through our data processing pipeline, which includes special operations such as affine transformation and audio-visual adjustment. Therefore, before evaluation, the test data must first be processed using the provided pipeline.
+
 ## 🙏 Acknowledgement
 
 - Our code is built on [AnimateDiff](https://github.com/guoyww/AnimateDiff). 
@@ -330,8 +337,15 @@ You can evaluate the accuracy of SyncNet on a dataset by running the following s
 
 Thanks for their generous contributions to the open-source community.
 
-<!-- ## Citation
-If you find our repo useful for your research, please consider citing our paper:
-```
+## 📖 Citation
 
-``` -->
+If you find our repo useful for your research, please consider citing our paper:
+
+```bibtex
+@article{li2024latentsync,
+  title={LatentSync: Taming Audio-Conditioned Latent Diffusion Models for Lip Sync with SyncNet Supervision},
+  author={Li, Chunyu and Zhang, Chao and Xu, Weikai and Lin, Jingyu and Xie, Jinghui and Feng, Weiguo and Peng, Bingyue and Chen, Cunjian and Xing, Weiwei},
+  journal={arXiv preprint arXiv:2412.09262},
+  year={2024}
+}
+```
