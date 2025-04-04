@@ -36,6 +36,8 @@ from ..whisper.audio2feature import Audio2Feature
 import tqdm
 import soundfile as sf
 
+import tempfile
+
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
@@ -264,38 +266,89 @@ class LipsyncPipeline(DiffusionPipeline):
         faces = torch.stack(faces)
         return faces, boxes, affine_matrices
 
-    def restore_video(self, faces: torch.Tensor, video_frames: np.ndarray, boxes: list, affine_matrices: list):
-        # Ensure we only process as many frames as there are faces.
-        video_frames = video_frames[: faces.shape[0]]
-        
-        # Determine the output frame shape from the first video frame.
-        frame_height, frame_width, channels = video_frames[0].shape
-        n_frames = faces.shape[0]
-        
-        # Create a memmap file to store the restored frames on disk.
-        memmap_filename = "temp_synced_frames.dat"
-        out_frames = np.memmap(memmap_filename, dtype=np.uint8, mode='w+', shape=(n_frames, frame_height, frame_width, channels))
-        
-        print(f"Restoring {n_frames} faces...")
-        for index, face in enumerate(tqdm.tqdm(faces)):
+    def restore_video(self, faces: torch.Tensor, video_frames: np.ndarray, boxes: list, affine_matrices: list) -> np.ndarray:
+        num_frames_to_process = min(len(faces), len(video_frames))
+
+        if num_frames_to_process == 0:
+            return np.array([], dtype=np.uint8)
+
+        first_frame_processed = None
+        output_dtype = np.uint8
+        output_shape = None
+
+        try:
+            index = 0
+            face_tensor = faces[index]
             x1, y1, x2, y2 = boxes[index]
-            height = int(y2 - y1)
-            width = int(x2 - x1)
-            # Resize the face to match the detected face region.
-            face_resized = torchvision.transforms.functional.resize(face, size=(height, width), antialias=True)
-            face_resized = rearrange(face_resized, "c h w -> h w c")
-            face_resized = (face_resized / 2 + 0.5).clamp(0, 1)
-            face_resized = (face_resized * 255).to(torch.uint8).cpu().numpy()
-            
-            # Restore the processed face back to the full video frame.
-            out_frame = self.image_processor.restorer.restore_img(video_frames[index], face_resized, affine_matrices[index])
-            
-            # Write the restored frame into the memmap array.
-            out_frames[index] = out_frame
-        
-        # Flush changes to disk.
-        out_frames.flush()
-        return out_frames
+            h_face = int(y2 - y1)
+            w_face = int(x2 - x1)
+
+            face_tensor = torchvision.transforms.functional.resize(face_tensor, size=(h_face, w_face), antialias=True)
+            face_tensor = rearrange(face_tensor, "c h w -> h w c")
+            face_tensor = (face_tensor / 2 + 0.5).clamp(0, 1)
+            face_np = (face_tensor * 255).to(torch.uint8).cpu().numpy()
+
+            current_video_frame = video_frames[index]
+
+            first_frame_processed = self.image_processor.restorer.restore_img(
+                current_video_frame, face_np, affine_matrices[index]
+            )
+
+            frame_h, frame_w, frame_c = first_frame_processed.shape
+            output_dtype = first_frame_processed.dtype
+            output_shape = (num_frames_to_process, frame_h, frame_w, frame_c)
+
+        except Exception as e:
+            raise ValueError("Failed to determine output shape from the first frame.") from e
+
+        temp_fd, temp_path = tempfile.mkstemp(suffix='.mmap', prefix='video_restore_')
+        os.close(temp_fd)
+
+        output_memmap = None
+        try:
+            output_memmap = np.memmap(temp_path, dtype=output_dtype, mode='w+', shape=output_shape)
+            output_memmap[0] = first_frame_processed
+            output_memmap.flush()
+
+            for index in tqdm.tqdm(range(1, num_frames_to_process)):
+                face_tensor = faces[index]
+                x1, y1, x2, y2 = boxes[index]
+                h_face = int(y2 - y1)
+                w_face = int(x2 - x1)
+
+                face_tensor = torchvision.transforms.functional.resize(face_tensor, size=(h_face, w_face), antialias=True)
+                face_tensor = rearrange(face_tensor, "c h w -> h w c")
+                face_tensor = (face_tensor / 2 + 0.5).clamp(0, 1)
+                face_np = (face_tensor * 255).to(torch.uint8).cpu().numpy()
+
+                current_video_frame = video_frames[index]
+
+                out_frame = self.image_processor.restorer.restore_img(
+                    current_video_frame, face_np, affine_matrices[index]
+                )
+
+                output_memmap[index] = out_frame
+
+            output_memmap.flush()
+            final_ram_array = np.array(output_memmap)
+            return final_ram_array
+
+        except Exception as e:
+            raise e
+        finally:
+            if output_memmap is not None:
+                if hasattr(output_memmap, '_mmap'):
+                    try:
+                        output_memmap._mmap.close()
+                    except Exception:
+                        pass
+                del output_memmap
+
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
     def loop_video(self, whisper_chunks: list, video_frames: np.ndarray):
         # If the audio is longer than the video, we need to loop the video
