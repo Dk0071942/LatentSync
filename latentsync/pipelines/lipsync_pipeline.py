@@ -146,6 +146,16 @@ class LipsyncPipeline(DiffusionPipeline):
         decoded_latents = self.vae.decode(latents).sample
         return decoded_latents
 
+    def enhance_image(self, decoded_latents: torch.Tensor, sharpness_factor: float = 1.5) -> torch.Tensor:
+        """Enhances the image quality using a sharpening filter."""
+        # Input shape: (f, c, h, w), range [-1, 1]
+        # torchvision expects input range [0, 1]
+        enhanced_latents = (decoded_latents / 2 + 0.5).clamp(0, 1)
+        enhanced_latents = torchvision.transforms.functional.adjust_sharpness(enhanced_latents, sharpness_factor)
+        # Convert back to range [-1, 1]
+        enhanced_latents = (enhanced_latents * 2 - 1)
+        return enhanced_latents
+
     def prepare_extra_step_kwargs(self, generator, eta):
         # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
         # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
@@ -532,6 +542,7 @@ class LipsyncPipeline(DiffusionPipeline):
 
             # Recover the pixel values
             decoded_latents = self.decode_latents(latents)
+            decoded_latents = self.enhance_image(decoded_latents)
             decoded_latents = self.paste_surrounding_pixels_back(
                 decoded_latents, ref_pixel_values, 1 - masks, device, weight_dtype
             )
