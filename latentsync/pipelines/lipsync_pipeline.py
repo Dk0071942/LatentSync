@@ -32,6 +32,7 @@ import cv2
 from ..models.unet import UNet3DConditionModel
 from ..utils.util import read_video, read_audio, write_video, check_ffmpeg_installed
 from ..utils.image_processor import ImageProcessor, load_fixed_mask
+from ..utils.image_upscale import ImageUpscale
 from ..whisper.audio2feature import Audio2Feature
 import tqdm
 import soundfile as sf
@@ -121,6 +122,8 @@ class LipsyncPipeline(DiffusionPipeline):
 
         self.set_progress_bar_config(desc="Steps")
 
+        self.image_upscaler = ImageUpscale()
+
     def enable_vae_slicing(self):
         self.vae.enable_slicing()
 
@@ -145,16 +148,6 @@ class LipsyncPipeline(DiffusionPipeline):
         latents = rearrange(latents, "b c f h w -> (b f) c h w")
         decoded_latents = self.vae.decode(latents).sample
         return decoded_latents
-
-    def enhance_image(self, decoded_latents: torch.Tensor, sharpness_factor: float = 1.5) -> torch.Tensor:
-        """Enhances the image quality using a sharpening filter."""
-        # Input shape: (f, c, h, w), range [-1, 1]
-        # torchvision expects input range [0, 1]
-        enhanced_latents = (decoded_latents / 2 + 0.5).clamp(0, 1)
-        enhanced_latents = torchvision.transforms.functional.adjust_sharpness(enhanced_latents, sharpness_factor)
-        # Convert back to range [-1, 1]
-        enhanced_latents = (enhanced_latents * 2 - 1)
-        return enhanced_latents
 
     def prepare_extra_step_kwargs(self, generator, eta):
         # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
@@ -590,7 +583,7 @@ class LipsyncPipeline(DiffusionPipeline):
             # Recover the pixel values for the processed frames
             # Use valid_latents which contains the final denoised latents for valid frames
             decoded_latents = self.decode_latents(valid_latents)
-            decoded_latents = self.enhance_image(decoded_latents)
+            decoded_latents = self.image_upscaler.enhance_and_upscale(decoded_latents, sharpness_factor=20)
             # Paste back using masks derived from valid faces
             decoded_latents = self.paste_surrounding_pixels_back(
                 decoded_latents, ref_pixel_values, 1 - masks, device, weight_dtype
