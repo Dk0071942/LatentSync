@@ -29,7 +29,7 @@ def process_video(
 
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # Set the output path for the processed video
-    output_path = str(output_dir / f"{video_file_path.stem}_{current_time}.mp4")  # Change the filename as needed
+    output_path = str(output_dir / f"{video_file_path.stem}_{current_time}.mp4") # Change the filename as needed
 
     config = OmegaConf.load(CONFIG_PATH)
 
@@ -51,7 +51,7 @@ def process_video(
             args=args,
         )
         print("Processing completed successfully.")
-        return output_path  # Ensure the output path is returned
+        return output_path # Ensure the output path is returned
     except Exception as e:
         print(f"Error during processing: {str(e)}")
         raise gr.Error(f"Error during processing: {str(e)}")
@@ -172,10 +172,26 @@ with gr.Blocks(title="LatentSync Video Processing") as demo:
             inference_steps,
             seed,
             enable_upscale,
-            sharpness_factor,   
+            sharpness_factor,  
         ],
         outputs=video_output,
     )
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=8000, inbrowser=False)
+    # --- Authentication ---
+    # Define username and password directly in the script
+    # !! Warning: Storing credentials directly in code is insecure !!
+    # !! Change these values directly here if needed              !!
+    AUTH_USERNAME = "admin"
+    AUTH_PASSWORD = "goAVA_2025"
+
+    auth_creds = (AUTH_USERNAME, AUTH_PASSWORD)
+    print(f"Authentication enabled for user: {AUTH_USERNAME}")
+    # --- End Authentication ---
+
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=8000,
+        inbrowser=False,
+        auth=auth_creds # Pass credentials tuple to enable authentication
+    )
