@@ -178,4 +178,4 @@ with gr.Blocks(title="LatentSync Video Processing") as demo:
     )
 
 if __name__ == "__main__":
-    demo.launch(inbrowser=True)
+    demo.launch(inbrowser=False)
