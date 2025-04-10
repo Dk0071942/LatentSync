@@ -418,6 +418,8 @@ class LipsyncPipeline(DiffusionPipeline):
         eta: float = 0.0,
         mask: str = "fix_mask",
         mask_image_path: str = "latentsync/utils/mask.png",
+        enable_upscale: Optional[bool] = True,
+        sharpness_factor: Optional[float] = 1,
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
@@ -583,7 +585,8 @@ class LipsyncPipeline(DiffusionPipeline):
             # Recover the pixel values for the processed frames
             # Use valid_latents which contains the final denoised latents for valid frames
             decoded_latents = self.decode_latents(valid_latents)
-            decoded_latents = self.image_upscaler.enhance_and_upscale(decoded_latents, sharpness_factor=20)
+            if enable_upscale:
+                decoded_latents = self.image_upscaler.enhance_and_upscale(decoded_latents, sharpness_factor)
             # Paste back using masks derived from valid faces
             decoded_latents = self.paste_surrounding_pixels_back(
                 decoded_latents, ref_pixel_values, 1 - masks, device, weight_dtype

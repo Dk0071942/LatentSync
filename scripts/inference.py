@@ -91,6 +91,8 @@ def main(config, args):
         width=config.data.resolution,
         height=config.data.resolution,
         mask_image_path=config.data.mask_image_path,
+        enable_upscale=args.enable_upscale,
+        sharpness_factor=args.sharpness_factor,
     )
 
 
@@ -104,6 +106,8 @@ if __name__ == "__main__":
     parser.add_argument("--inference_steps", type=int, default=20)
     parser.add_argument("--guidance_scale", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=1247)
+    parser.add_argument("--enable_upscale", type=bool, default=True)
+    parser.add_argument("--sharpness_factor", type=float, default=1.5)
     args = parser.parse_args()
 
     config = OmegaConf.load(args.unet_config_path)

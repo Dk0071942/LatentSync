@@ -15,6 +15,8 @@ def process_video(
     guidance_scale,
     inference_steps,
     seed,
+    enable_upscale,
+    sharpness_factor,
 ):
     # Create the temp directory if it doesn't exist
     output_dir = Path("./temp")
@@ -35,11 +37,13 @@ def process_video(
         {
             "guidance_scale": guidance_scale,
             "inference_steps": inference_steps,
+            "enable_upscale": enable_upscale,
+            "sharpness_factor": sharpness_factor,
         }
     )
 
     # Parse the arguments
-    args = create_args(video_path, audio_path, output_path, inference_steps, guidance_scale, seed)
+    args = create_args(video_path, audio_path, output_path, inference_steps, guidance_scale, seed, enable_upscale, sharpness_factor)
 
     try:
         result = main(
@@ -54,9 +58,10 @@ def process_video(
 
 
 def create_args(
-    video_path: str, audio_path: str, output_path: str, inference_steps: int, guidance_scale: float, seed: int
+    video_path: str, audio_path: str, output_path: str, inference_steps: int, guidance_scale: float, seed: int, enable_upscale: bool, sharpness_factor: float
 ) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--unet_config_path", type=str, default="configs/unet.yaml")
     parser.add_argument("--inference_ckpt_path", type=str, required=True)
     parser.add_argument("--video_path", type=str, required=True)
     parser.add_argument("--audio_path", type=str, required=True)
@@ -64,25 +69,36 @@ def create_args(
     parser.add_argument("--inference_steps", type=int, default=20)
     parser.add_argument("--guidance_scale", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=1247)
+    parser.add_argument("--enable_upscale", action='store_true', help="Enable upscale")
+    parser.add_argument("--sharpness_factor", type=float, default=1.5)
 
-    return parser.parse_args(
-        [
-            "--inference_ckpt_path",
-            CHECKPOINT_PATH.absolute().as_posix(),
-            "--video_path",
-            video_path,
-            "--audio_path",
-            audio_path,
-            "--video_out_path",
-            output_path,
-            "--inference_steps",
-            str(inference_steps),
-            "--guidance_scale",
-            str(guidance_scale),
-            "--seed",
-            str(seed),
-        ]
-    )
+    # Build the argument list dynamically
+    args_list = [
+        "--unet_config_path",
+        CONFIG_PATH.absolute().as_posix(),
+        "--inference_ckpt_path",
+        CHECKPOINT_PATH.absolute().as_posix(),
+        "--video_path",
+        video_path,
+        "--audio_path",
+        audio_path,
+        "--video_out_path",
+        output_path,
+        "--inference_steps",
+        str(inference_steps),
+        "--guidance_scale",
+        str(guidance_scale),
+        "--seed",
+        str(seed),
+        "--sharpness_factor",
+        str(sharpness_factor),
+    ]
+
+    # Add the flag only if enable_upscale is True
+    if enable_upscale:
+        args_list.append("--enable_upscale")
+
+    return parser.parse_args(args_list)
 
 
 # Create Gradio interface
@@ -126,6 +142,9 @@ with gr.Blocks(title="LatentSync Video Processing") as demo:
                     label="Guidance Scale",
                 )
                 inference_steps = gr.Slider(minimum=10, maximum=50, value=20, step=1, label="Inference Steps")
+            with gr.Row():  
+                enable_upscale = gr.Checkbox(value=True, label="Enable Upscale")
+                sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=1.5, step=0.5, label="Sharpness Factor")
 
             with gr.Row():
                 seed = gr.Number(value=1247, label="Random Seed", precision=0)
@@ -152,6 +171,8 @@ with gr.Blocks(title="LatentSync Video Processing") as demo:
             guidance_scale,
             inference_steps,
             seed,
+            enable_upscale,
+            sharpness_factor,   
         ],
         outputs=video_output,
     )
