@@ -37,7 +37,7 @@ def gather_video_paths(input_dir, output_dir):
             gather_video_paths(os.path.join(input_dir, video), os.path.join(output_dir, video))
 
 
-class FaceDetector:
+class VideoProcessor:
     def __init__(self, resolution: int = 512, device: str = "cpu"):
         self.image_processor = ImageProcessor(resolution, "fix_mask", device)
 
@@ -45,7 +45,7 @@ class FaceDetector:
         video_frames = read_video(video_path, change_fps=False)
         results = []
         for frame in video_frames:
-            frame, _, _ = self.image_processor.affine_transform(frame, allow_multi_faces=False)
+            frame, _, _ = self.image_processor.affine_transform(frame)
             results.append(frame)
         results = torch.stack(results)
 
@@ -76,13 +76,13 @@ def combine_video_audio(video_frames, video_input_path, video_output_path, proce
 
 def func(paths, process_temp_dir, device_id, resolution):
     os.makedirs(process_temp_dir, exist_ok=True)
-    face_detector = FaceDetector(resolution, f"cuda:{device_id}")
+    video_processor = VideoProcessor(resolution, f"cuda:{device_id}")
 
     for video_input, video_output in paths:
         if os.path.isfile(video_output):
             continue
         try:
-            video_frames = face_detector.affine_transform_video(video_input)
+            video_frames = video_processor.affine_transform_video(video_input)
         except Exception as e:  # Handle the exception of face not detcted
             print(f"Exception: {e} - {video_input}")
             continue
@@ -91,7 +91,7 @@ def func(paths, process_temp_dir, device_id, resolution):
         combine_video_audio(video_frames, video_input, video_output, process_temp_dir)
         print(f"Saved: {video_output}")
 
-    face_detector.close()
+    video_processor.close()
 
 
 def split(a, n):

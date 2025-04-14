@@ -95,25 +95,15 @@ If the download is successful, the checkpoints should appear as follows:
 ```
 ./checkpoints/
 |-- latentsync_unet.pt
-|-- stable_syncnet.pt
 |-- whisper
 |   `-- tiny.pt
-|-- auxiliary
-|   |-- 2DFAN4-cd938726ad.zip
-|   |-- i3d_torchscript.pt
-|   |-- koniq_pretrained.pkl
-|   |-- s3fd-619a316812.pth
-|   |-- sfd_face.pth
-|   |-- syncnet_v2.model
-|   |-- vgg16-397923af.pth
-|   `-- vit_g_hybrid_pt_1200e_ssv2_ft.pth
 ```
 
-These already include all the checkpoints required for latentsync training and inference. If you just want to try inference, you only need to download `latentsync_unet.pt` and `tiny.pt` from our [HuggingFace repo](https://huggingface.co/ByteDance/LatentSync-1.5)
+Or you can download `latentsync_unet.pt` and `tiny.pt` manually from our [HuggingFace repo](https://huggingface.co/ByteDance/LatentSync-1.5)
 
 ## 🚀 Inference
 
-There are two ways to perform inference, and both require **6.8 GB** of VRAM.
+There are two ways to perform inference, and both require **7.8 GB** of VRAM.
 
 ### 1. Gradio App
 
@@ -286,7 +276,13 @@ You should change the parameter `input_dir` in the script to specify the data di
 
 ## 🏋️‍♂️ Training U-Net
 
-Before training, you must process the data as described above and download all the checkpoints. We released a pretrained SyncNet with 94% accuracy on both VoxCeleb2 and HDTF datasets for the supervision of U-Net training. If all the preparations are complete, you can train the U-Net with the following script:
+Before training, you should process the data as described above. We released a pretrained SyncNet with 94% accuracy on both VoxCeleb2 and HDTF datasets for the supervision of U-Net training. You can execute the following command to download this SyncNet checkpoint:
+
+```bash
+huggingface-cli download ByteDance/LatentSync-1.5 stable_syncnet.pt --local-dir checkpoints
+```
+
+If all the preparations are complete, you can train the U-Net with the following script:
 
 ```bash
 ./train_unet.sh

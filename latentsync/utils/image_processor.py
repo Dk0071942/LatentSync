@@ -19,13 +19,8 @@ import mediapipe as mp
 import torch
 import numpy as np
 from typing import Union
-from .affine_transform import AlignRestore, laplacianSmooth
-import face_alignment
-
-"""
-If you are enlarging the image, you should prefer to use INTER_LINEAR or INTER_CUBIC interpolation. If you are shrinking the image, you should prefer to use INTER_AREA interpolation.
-https://stackoverflow.com/questions/23853632/which-kind-of-interpolation-best-for-resizing-image
-"""
+from .affine_transform import AlignRestore
+from .face_detector import FaceDetector
 
 
 def load_fixed_mask(resolution: int, mask_image_path="latentsync/utils/mask.png") -> torch.Tensor:
@@ -49,8 +44,7 @@ class ImageProcessor:
             self.face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=True)  # Process single image
         if mask == "fix_mask":
             self.face_mesh = None
-            self.smoother = laplacianSmooth()
-            self.restorer = AlignRestore()
+            self.restorer = AlignRestore(device=device)
 
             if mask_image is None:
                 self.mask_image = load_fixed_mask(resolution)
@@ -58,14 +52,12 @@ class ImageProcessor:
                 self.mask_image = mask_image
 
             if device != "cpu":
-                self.fa = face_alignment.FaceAlignment(
-                    face_alignment.LandmarksType.TWO_D, flip_input=False, device=device
-                )
+                self.face_detector = FaceDetector(device=device)
                 self.face_mesh = None
             else:
                 # self.face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=True)  # Process single image
                 self.face_mesh = None
-                self.fa = None
+                self.face_detector = None
 
     def detect_facial_landmarks(self, image: np.ndarray):
         height, width, _ = image.shape
@@ -115,28 +107,33 @@ class ImageProcessor:
 
         return pixel_values, masked_pixel_values, mask
 
-    def affine_transform(self, image: torch.Tensor, allow_multi_faces: bool = True) -> np.ndarray:
+    def affine_transform(self, image: torch.Tensor) -> np.ndarray:
         # image = rearrange(image, "c h w-> h w c").numpy()
-        if self.fa is None:
+        if self.face_detector is None:
             landmark_coordinates = np.array(self.detect_facial_landmarks(image))
             lm68 = mediapipe_lm478_to_face_alignment_lm68(landmark_coordinates)
         else:
-            detected_faces = self.fa.get_landmarks(image)
-            if detected_faces is None:
+            bbox, landmark_2d_106 = self.face_detector(image)
+            if bbox is None:
                 raise RuntimeError("Face not detected")
-            if not allow_multi_faces and len(detected_faces) > 1:
-                raise RuntimeError("More than one face detected")
-            lm68 = detected_faces[0]
 
-        points = self.smoother.smooth(lm68)
+        pt_left_eye = np.mean(landmark_2d_106[[43, 48, 49, 51, 50]], axis=0)  # left eyebrow center
+        pt_right_eye = np.mean(landmark_2d_106[101:106], axis=0)  # right eyebrow center
+        pt_nose = np.mean(landmark_2d_106[[74, 77, 83, 86]], axis=0)  # nose center
+        # pt_nose = np.mean(landmark_2d_106[[72, 73, 74, 76, 77, 78, 79, 80, 82, 83, 84, 85, 86]], axis=0)  # nose center
+
+        landmarks = [
+            np.round(pt_left_eye),
+            np.round(pt_right_eye),
+            np.round(pt_nose),
+        ]
+
         lmk3_ = np.zeros((3, 2))
-        lmk3_[0] = points[17:22].mean(0)
-        lmk3_[1] = points[22:27].mean(0)
-        lmk3_[2] = points[27:36].mean(0)
-        # print(lmk3_)
-        face, affine_matrix = self.restorer.align_warp_face(
-            image.copy(), lmks3=lmk3_, smooth=True, border_mode="constant"
-        )
+        lmk3_[0] = landmarks[0]  # left eyebrow center
+        lmk3_[1] = landmarks[1]  # right eyebrow center
+        lmk3_[2] = landmarks[2]  # nose center
+
+        face, affine_matrix = self.restorer.align_warp_face(image.copy(), lmks3=lmk3_, smooth=True)
         box = [0, 0, face.shape[1], face.shape[0]]  # x1, y1, x2, y2
         face = cv2.resize(face, (self.resolution, self.resolution), interpolation=cv2.INTER_LANCZOS4)
         face = rearrange(torch.from_numpy(face), "h w c -> c h w")

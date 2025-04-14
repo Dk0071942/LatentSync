@@ -465,7 +465,6 @@ class LipsyncPipeline(DiffusionPipeline):
         video_frames, faces, boxes, affine_matrices, face_detected_flags = self.loop_video(whisper_chunks, video_frames)
 
         synced_video_frames = []
-        masked_video_frames = []
 
         num_channels_latents = self.vae.config.latent_channels
 
@@ -623,9 +622,8 @@ class LipsyncPipeline(DiffusionPipeline):
         os.makedirs(temp_dir, exist_ok=True)
 
         write_video(os.path.join(temp_dir, "video.mp4"), synced_video_frames, fps=25)
-        # write_video(video_mask_path, masked_video_frames, fps=25)
 
         sf.write(os.path.join(temp_dir, "audio.wav"), audio_samples, audio_sample_rate)
 
-        command = f"ffmpeg -y -loglevel error -nostdin -i {os.path.join(temp_dir, 'video.mp4')} -i {os.path.join(temp_dir, 'audio.wav')} -c:v libx264 -c:a aac -q:v 0 -q:a 0 {video_out_path}"
+        command = f"ffmpeg -y -loglevel error -nostdin -i {os.path.join(temp_dir, 'video.mp4')} -i {os.path.join(temp_dir, 'audio.wav')} -c:v libx264 -crf 18 -c:a aac -q:v 0 -q:a 0 {video_out_path}"
         subprocess.run(command, shell=True)
