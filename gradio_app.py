@@ -137,14 +137,14 @@ with gr.Blocks(title="LatentSync Video Processing") as demo:
                 guidance_scale = gr.Slider(
                     minimum=1.0,
                     maximum=2.5,
-                    value=1.5,
-                    step=0.5,
+                    value=1.2,
+                    step=0.1,
                     label="Guidance Scale",
                 )
-                inference_steps = gr.Slider(minimum=10, maximum=50, value=20, step=1, label="Inference Steps")
+                inference_steps = gr.Slider(minimum=10, maximum=50, value=50, step=1, label="Inference Steps")
             with gr.Row():  
                 enable_upscale = gr.Checkbox(value=True, label="Enable Upscale")
-                sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=1.5, step=0.5, label="Sharpness Factor")
+                sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=7.5, step=0.5, label="Sharpness Factor")
 
             with gr.Row():
                 seed = gr.Number(value=1247, label="Random Seed", precision=0)
