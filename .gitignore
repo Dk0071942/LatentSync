@@ -39,6 +39,7 @@ wandb/
 *.jpg
 *.jpeg
 *.csv
+*.pdf
 
 # log files
 *.log
@@ -52,3 +53,4 @@ wandb/
 input_files/
 
 temp_synced_frames.dat
+.cog/
