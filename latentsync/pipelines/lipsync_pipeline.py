@@ -10,6 +10,7 @@ import subprocess
 import numpy as np
 import torch
 import torchvision
+from torchvision import transforms
 
 from packaging import version
 
@@ -287,78 +288,121 @@ class LipsyncPipeline(DiffusionPipeline):
         return faces, boxes, affine_matrices, face_detected_flags
 
     def restore_video(self, faces: Optional[torch.Tensor], video_frames: np.ndarray, boxes: list, affine_matrices: list, face_detected_flags: list) -> np.ndarray:
+        """
+        Restores faces in video frames using processed face tensors.
+
+        Handles all original frames, using processed faces where available
+        and original frames otherwise. Uses memmap for memory efficiency.
+        Incorporates BICUBIC resizing and passes tensors directly to the restorer.
+        """
         num_frames_to_process = len(video_frames) # Process all original frames
 
         if num_frames_to_process == 0:
             return np.array([], dtype=np.uint8)
 
         # Determine output shape and dtype from the first original frame
-        output_dtype = video_frames[0].dtype
-        output_shape = video_frames.shape
+        # Ensure video_frames is not empty before accessing index 0
+        if len(video_frames) > 0:
+            output_dtype = video_frames[0].dtype
+            output_shape = video_frames.shape
+        else: # Handle edge case of empty video_frames input more robustly
+             return np.array([], dtype=np.uint8)
+
 
         temp_fd, temp_path = tempfile.mkstemp(suffix='.mmap', prefix='video_restore_')
         os.close(temp_fd)
 
         output_memmap = None
         processed_frame_idx = 0 # Index for the 'faces' tensor
+        index = -1 # Initialize index for potential use in error message outside loop
+
         try:
             output_memmap = np.memmap(temp_path, dtype=output_dtype, mode='w+', shape=output_shape)
 
             print(f"Restoring {num_frames_to_process} frames...")
             for index in tqdm.tqdm(range(num_frames_to_process)):
                 if face_detected_flags[index]:
-                    # Ensure we have processed faces data and corresponding box/matrix
+                    # Check if we have the necessary data for this flagged frame
+                    # Note: Check faces is not None *and* check processed_frame_idx is within bounds
                     if faces is None or processed_frame_idx >= len(faces) or boxes[index] is None or affine_matrices[index] is None:
-                         print(f"Warning: Face detected flag is True for frame {index}, but required data is missing. Using original frame.")
-                         output_memmap[index] = video_frames[index]
-                         # Do not increment processed_frame_idx if we didn't use a processed face
-                         continue # Skip to next frame
+                        print(f"Warning: Face detected flag is True for frame {index}, but required data (face tensor/box/matrix) is missing or index mismatch. Using original frame.")
+                        output_memmap[index] = video_frames[index]
+                        # Do *not* increment processed_frame_idx if we didn't use a processed face
+                        continue # Skip to next frame
 
+                    # --- Start: Face processing logic from the second version ---
                     face_tensor = faces[processed_frame_idx]
                     x1, y1, x2, y2 = boxes[index]
-                    h_face = int(y2 - y1)
-                    w_face = int(x2 - x1)
+                    # Use integer conversion robustly
+                    h_face = int(round(y2 - y1))
+                    w_face = int(round(x2 - x1))
 
-                    # Resize the processed face tensor to the original detected box size
-                    face_tensor_resized = torchvision.transforms.functional.resize(face_tensor, size=(h_face, w_face), antialias=True)
-                    face_tensor_resized = rearrange(face_tensor_resized, "c h w -> h w c")
-                    face_tensor_resized = (face_tensor_resized / 2 + 0.5).clamp(0, 1)
-                    face_np = (face_tensor_resized * 255).to(torch.uint8).cpu().numpy()
+                    # Ensure height and width are positive
+                    if h_face <= 0 or w_face <= 0:
+                         print(f"Warning: Invalid bounding box dimensions ({w_face}x{h_face}) for frame {index}. Using original frame.")
+                         output_memmap[index] = video_frames[index]
+                         processed_frame_idx += 1 # Increment index as we consumed the face tensor, even if we couldn't use it
+                         continue
+
+
+                    # Resize using BICUBIC interpolation (from the second version)
+                    # Ensure face_tensor is in C, H, W format if needed by resize
+                    face_tensor_resized = torchvision.transforms.functional.resize(
+                        face_tensor,
+                        size=(h_face, w_face),
+                        interpolation=transforms.InterpolationMode.BICUBIC,
+                        antialias=True
+                    )
 
                     current_video_frame = video_frames[index]
 
                     # Restore the face into the original frame
+                    # Pass the resized *tensor* directly (from the second version)
+                    # Ensure self.image_processor.restorer.restore_img can handle tensors
                     out_frame = self.image_processor.restorer.restore_img(
-                        current_video_frame, face_np, affine_matrices[index]
+                        current_video_frame, face_tensor_resized, affine_matrices[index]
                     )
+                    # --- End: Face processing logic from the second version ---
+
                     output_memmap[index] = out_frame
                     processed_frame_idx += 1 # Move to the next processed face
+
                 else:
-                    # No face detected, use the original frame directly
+                    # No face detected flag, use the original frame directly
                     output_memmap[index] = video_frames[index]
 
+            # --- Cleanup logic from the first version ---
             output_memmap.flush()
+            # Copy data from memmap to an in-memory array before returning
             final_ram_array = np.array(output_memmap)
             return final_ram_array
 
         except Exception as e:
             # Include index in error for better debugging
             print(f"Error during video restoration at frame index {index}: {e}")
-            raise e
+            # It might be useful to log the traceback too:
+            # import traceback
+            # print(traceback.format_exc())
+            raise e # Re-raise the exception after logging
         finally:
+            # Ensure memmap is closed and file is deleted even if errors occur
             if output_memmap is not None:
-                if hasattr(output_memmap, '_mmap'):
+                # Check if the underlying mmap object exists and close it
+                if hasattr(output_memmap, '_mmap') and output_memmap._mmap is not None:
                     try:
                         output_memmap._mmap.close()
-                    except Exception:
-                        pass
+                    except Exception as close_err:
+                         print(f"Warning: Exception while closing memmap file handle: {close_err}")
+                # Explicitly delete the reference to potentially trigger GC and release file lock sooner
                 del output_memmap
 
+            # Ensure the temporary file is removed
             if os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
                 except OSError as e:
-                     print(f"Error removing temporary file {temp_path}: {e}") # Log error
+                    # Log error if removal fails (e.g., file lock issues)
+                    print(f"Error removing temporary file {temp_path}: {e}")
 
     def loop_video(self, whisper_chunks: list, video_frames: np.ndarray):
         # If the audio is longer than the video, we need to loop the video
