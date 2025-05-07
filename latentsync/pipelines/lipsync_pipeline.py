@@ -401,8 +401,7 @@ class LipsyncPipeline(DiffusionPipeline):
                 try:
                     os.remove(temp_path)
                 except OSError as e:
-                    # Log error if removal fails (e.g., file lock issues)
-                    print(f"Error removing temporary file {temp_path}: {e}")
+                     print(f"Error removing temporary file {temp_path}: {e}") # Log error
 
     def loop_video(self, whisper_chunks: list, video_frames: np.ndarray):
         # If the audio is longer than the video, we need to loop the video
