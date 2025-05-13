@@ -1,14 +1,20 @@
 # nixpacks.toml
 [phases.setup]
-aptPkgs = ["libgl1", "ffmpeg"]
+aptPkgs = ["python3", "python3-pip", "ffmpeg", "libgl1", "curl", "wget", "gcc"] # Added python3-pip
 
 [phases.install]
 cmds = [
-    "pip install -r requirements.txt" # Ensure huggingface-hub is in requirements.txt
+    "python3 -m pip install --upgrade pip", # Upgrade pip first
+    "python3 -m pip install -r requirements.txt"  # Use python3 -m pip
 ]
+# Ensure huggingface-hub is in requirements.txt
 
 [phases.build]
 cmds = [
-    "huggingface-cli download ByteDance/LatentSync-1.5 whisper/tiny.pt --local-dir checkpoints",
-    "huggingface-cli download ByteDance/LatentSync-1.5 latentsync_unet.pt --local-dir checkpoints"
+    "python3 -m huggingface_hub.commands.cli download ByteDance/LatentSync-1.5 whisper/tiny.pt --local-dir checkpoints",
+    "python3 -m huggingface_hub.commands.cli download ByteDance/LatentSync-1.5 latentsync_unet.pt --local-dir checkpoints"
+    # Using python3 -m huggingface_hub.commands.cli is a more robust way to call the CLI
 ]
+
+[start]
+cmd = "python3 gradio_app.py"
