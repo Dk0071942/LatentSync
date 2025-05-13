@@ -6,9 +6,9 @@ FROM python:3.10-slim
 # Set the working directory in the container
 WORKDIR /app
 
-# Install git, ffmpeg, and libgl1 (for OpenCV)
+# Install git, ffmpeg, and libgl1 (for OpenCV), and build-essential (for g++ and other build tools)
 RUN apt-get update && \
-    apt-get install -y git ffmpeg libgl1 --no-install-recommends && \
+    apt-get install -y git ffmpeg libgl1 build-essential --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the dependencies file to the working directory
