@@ -187,7 +187,7 @@ def main(config):
         shuffle=False,
         sampler=distributed_sampler,
         num_workers=config.data.num_workers,
-        pin_memory=False,
+        pin_memory=True,
         drop_last=True,
         worker_init_fn=train_dataset.worker_init_fn,
     )
@@ -215,7 +215,7 @@ def main(config):
     pipeline = LipsyncPipeline(
         vae=vae,
         audio_encoder=audio_encoder,
-        denoising_unet=denoising_unet,
+        unet=denoising_unet,
         scheduler=noise_scheduler,
     ).to(device)
     pipeline.set_progress_bar_config(disable=True)

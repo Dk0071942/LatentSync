@@ -54,3 +54,7 @@ input_files/
 
 temp_synced_frames.dat
 .cog/
+
+training_materials/
+file_list/
+validation_set/
