@@ -9,7 +9,7 @@ data:
   val_video_path: validation_set/AD2_Clip.mp4
   val_audio_path: validation_set/AD2_Audio.mp3
   batch_size: 1 # 4
-  num_workers: 12 # 12
+  num_workers: 8 # 12
   num_frames: 16
   resolution: 256
   mask_image_path: latentsync/utils/mask.png
@@ -19,7 +19,7 @@ data:
 
 ckpt:
   resume_ckpt_path: checkpoints/latentsync_unet.pt
-  save_ckpt_steps: 10000
+  save_ckpt_steps: 5000
 
 run:
   pixel_space_supervise: true
