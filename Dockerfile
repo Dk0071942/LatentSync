@@ -15,11 +15,7 @@ RUN apt-get update && \
 COPY requirements.txt .
 
 # Install Python dependencies (huggingface-hub is in requirements.txt, so it will be available)
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Create the checkpoints directory. This directory will be used as a mount point
-# for persistent storage in Coolify where model checkpoints will be stored.
-RUN mkdir -p /app/checkpoints
+RUN pip install --cache-dir=/root/.cache/pip -r requirements.txt
 
 # Copy the rest of the application's source code from the current directory to the working directory in the container
 COPY . .
