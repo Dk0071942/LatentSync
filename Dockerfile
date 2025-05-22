@@ -1,7 +1,7 @@
 # Use an official Python runtime as a parent image
 # Consider using a CUDA-enabled base image if GPU support is critical, e.g., nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
 # This is suggested by the presence of onnxruntime-gpu and torch with cu121 in requirements.txt
-FROM python:3.10-slim
+FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
 
 # Set the working directory in the container
 WORKDIR /app
