@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Install git, ffmpeg, and libgl1 (for OpenCV), and build-essential (for g++ and other build tools), python3 and python3-pip
 RUN apt-get update && \
-    apt-get install -y git ffmpeg libgl1 build-essential python3 python3-pip --no-install-recommends && \
+    apt-get install -y git ffmpeg libgl1 build-essential python3 python3-pip python3-dev --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the dependencies file to the working directory
