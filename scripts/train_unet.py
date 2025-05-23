@@ -134,7 +134,7 @@ def main(config):
         if syncnet_config.ckpt.inference_ckpt_path == "":
             raise ValueError("SyncNet path is not provided")
         syncnet = StableSyncNet(OmegaConf.to_container(syncnet_config.model), gradient_checkpointing=True).to(
-            device=device, dtype=torch.float16
+            device=device, dtype=torch.float32
         )
         syncnet_checkpoint = torch.load(
             syncnet_config.ckpt.inference_ckpt_path, map_location=device, weights_only=True
@@ -401,7 +401,17 @@ def main(config):
                     height = syncnet_input.shape[2]
                     syncnet_input = syncnet_input[:, :, height // 2 :, :]
                 ones_tensor = torch.ones((config.data.batch_size, 1)).float().to(device=device)
-                vision_embeds, audio_embeds = syncnet(syncnet_input, mel)
+
+                # Ensure inputs to syncnet are float32 if on CUDA and half precision
+                syncnet_input_to_syncnet = syncnet_input
+                if syncnet_input_to_syncnet.device.type == 'cuda' and syncnet_input_to_syncnet.dtype == torch.half:
+                    syncnet_input_to_syncnet = syncnet_input_to_syncnet.float()
+
+                mel_to_syncnet = mel
+                if mel_to_syncnet.device.type == 'cuda' and mel_to_syncnet.dtype == torch.half:
+                    mel_to_syncnet = mel_to_syncnet.float()
+
+                vision_embeds, audio_embeds = syncnet(syncnet_input_to_syncnet, mel_to_syncnet)
                 sync_loss = cosine_loss(vision_embeds.float(), audio_embeds.float(), ones_tensor).mean()
             else:
                 sync_loss = 0

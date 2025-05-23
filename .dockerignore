@@ -32,8 +32,8 @@ logs/
 *.DS_Store
 data/ # Assuming data is large and not needed in the image or mounted separately
 models/ # Assuming models are large and not needed in the image or mounted separately
-checkpoints/ # Assuming checkpoints are large and not needed in image or mounted separately
-output/ # Assuming output is generated at runtime
+# checkpoints/ # Assuming checkpoints are large and not needed in image or mounted separately
+# output/ # Assuming output is generated at runtime
 outputs/ # Assuming output is generated at runtime
 results/ # Assuming results are generated at runtime
 
