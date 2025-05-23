@@ -17,6 +17,11 @@ COPY requirements.txt .
 # Install Python dependencies (huggingface-hub is in requirements.txt, so it will be available)
 RUN pip3 install --cache-dir=/root/.cache/pip -r requirements.txt
 
+# Create checkpoints directory and download models
+RUN mkdir -p /app/checkpoints && \
+    huggingface-cli download ByteDance/LatentSync-1.5 whisper/tiny.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
+    huggingface-cli download ByteDance/LatentSync-1.5 latentsync_unet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False
+
 # Copy the rest of the application's source code from the current directory to the working directory in the container
 COPY . .
 
