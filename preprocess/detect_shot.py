@@ -34,9 +34,8 @@ def gather_paths(input_dir, output_dir):
 
 def detect_shot(video_input, output_dir):
     os.makedirs(output_dir, exist_ok=True)
-    video = os.path.basename(video_input)[:-4]
-    command = f"scenedetect --quiet -i {video_input} detect-adaptive --threshold 2 split-video --filename '{video}_shot_$SCENE_NUMBER' --output {output_dir}"
-    # command = f"scenedetect --quiet -i {video_input} detect-adaptive --threshold 2 split-video --high-quality --filename '{video}_shot_$SCENE_NUMBER' --output {output_dir}"
+    video_basename = os.path.basename(video_input)[:-4].replace(" ", "_")
+    command = f'''scenedetect --quiet -i "{video_input}" detect-adaptive --threshold 2 split-video --filename "{video_basename}_shot_$SCENE_NUMBER" --output "{output_dir}" -a "-map 0:v -map 0:a"'''
     subprocess.run(command, shell=True)
 
 
@@ -45,6 +44,8 @@ def multi_run_wrapper(args):
 
 
 def detect_shot_multiprocessing(input_dir, output_dir, num_workers):
+    global paths
+    paths = []
     print(f"Recursively gathering video paths of {input_dir} ...")
     gather_paths(input_dir, output_dir)
 
