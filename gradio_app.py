@@ -4,9 +4,16 @@ from scripts.inference import main
 from omegaconf import OmegaConf
 import argparse
 from datetime import datetime
+import os # Added for listing files
 
 CONFIG_PATH = Path("configs/unet/stage2.yaml")
-CHECKPOINT_PATH = Path("checkpoints/latentsync_unet.pt")
+# CHECKPOINT_PATH = Path("checkpoints/latentsync_unet.pt") # Removed, will be dynamic
+
+
+# Helper function to get checkpoint files
+def get_checkpoint_files(checkpoint_dir="checkpoints"):
+    checkpoint_path = Path(checkpoint_dir)
+    return [f.name for f in checkpoint_path.glob("*.pt")]
 
 
 def process_video(
@@ -17,6 +24,7 @@ def process_video(
     seed,
     enable_upscale,
     sharpness_factor,
+    selected_checkpoint, # Added new argument
 ):
     # Create the temp directory if it doesn't exist
     output_dir = Path("./temp")
@@ -26,6 +34,10 @@ def process_video(
     video_file_path = Path(video_path)
     video_path = video_file_path.absolute().as_posix()
     audio_path = Path(audio_path).absolute().as_posix()
+    
+    # Construct the full checkpoint path
+    checkpoint_path = Path("checkpoints") / selected_checkpoint
+
 
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # Set the output path for the processed video
@@ -43,7 +55,17 @@ def process_video(
     )
 
     # Parse the arguments
-    args = create_args(video_path, audio_path, output_path, inference_steps, guidance_scale, seed, enable_upscale, sharpness_factor)
+    args = create_args(
+        video_path,
+        audio_path,
+        output_path,
+        inference_steps,
+        guidance_scale,
+        seed,
+        enable_upscale,
+        sharpness_factor,
+        checkpoint_path.absolute().as_posix(), # Pass the selected checkpoint path
+    )
 
     try:
         result = main(
@@ -58,7 +80,15 @@ def process_video(
 
 
 def create_args(
-    video_path: str, audio_path: str, output_path: str, inference_steps: int, guidance_scale: float, seed: int, enable_upscale: bool, sharpness_factor: float
+    video_path: str,
+    audio_path: str,
+    output_path: str,
+    inference_steps: int,
+    guidance_scale: float,
+    seed: int,
+    enable_upscale: bool,
+    sharpness_factor: float,
+    checkpoint_path: str, # Added new argument
 ) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--unet_config_path", type=str, default="configs/unet.yaml")
@@ -77,7 +107,7 @@ def create_args(
         "--unet_config_path",
         CONFIG_PATH.absolute().as_posix(),
         "--inference_ckpt_path",
-        CHECKPOINT_PATH.absolute().as_posix(),
+        checkpoint_path, # Use the passed checkpoint_path
         "--video_path",
         video_path,
         "--audio_path",
@@ -122,6 +152,21 @@ with gr.Blocks(title="LatentSync demo") as demo:
         with gr.Column():
             video_input = gr.Video(label="Input Video")
             audio_input = gr.Audio(label="Input Audio", type="filepath")
+            
+            # Add checkpoint selection dropdown
+            checkpoint_files = get_checkpoint_files()
+            if not checkpoint_files: # Handle case with no checkpoints
+                checkpoint_files = ["No checkpoints found"]
+                default_checkpoint = "No checkpoints found"
+            else:
+                # Try to set a sensible default, e.g., 'latentsync_unet.pt' if available
+                default_checkpoint = "latentsync_unet.pt" if "latentsync_unet.pt" in checkpoint_files else checkpoint_files[0]
+
+            checkpoint_dropdown = gr.Dropdown(
+                choices=checkpoint_files,
+                value=default_checkpoint,
+                label="Select UNet Checkpoint",
+            )
 
             with gr.Row():
                 guidance_scale = gr.Slider(
@@ -162,7 +207,8 @@ with gr.Blocks(title="LatentSync demo") as demo:
             inference_steps,
             seed,
             enable_upscale,
-            sharpness_factor,  
+            sharpness_factor,
+            checkpoint_dropdown, # Add checkpoint_dropdown to inputs
         ],
         outputs=video_output,
     )
