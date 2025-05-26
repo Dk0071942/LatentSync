@@ -1,5 +1,5 @@
 torch==2.7.0
-torchvision==0.16.0
+torchvision
 diffusers==0.32.2
 transformers==4.48.0
 decord==0.6.0
