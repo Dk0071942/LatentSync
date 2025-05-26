@@ -11,9 +11,25 @@ CONFIG_PATH = Path("configs/unet/stage2.yaml")
 
 
 # Helper function to get checkpoint files
-def get_checkpoint_files(checkpoint_dir="checkpoints"):
-    checkpoint_path = Path(checkpoint_dir)
-    return [f.name for f in checkpoint_path.glob("*.pt")]
+def get_checkpoint_files():
+    base_dirs_to_scan = [
+        Path("checkpoints"),
+        Path("debug"),
+    ]
+    collected_paths_str = set()
+
+    for p_dir in base_dirs_to_scan:
+        if p_dir.exists() and p_dir.is_dir(): # Ensure directory exists
+            if p_dir.name == "debug": # Recursive search for 'debug' directory
+                for f_path in p_dir.rglob("*.pt"):
+                    collected_paths_str.add(f_path.as_posix())
+            else: # Non-recursive for other specified dirs like 'checkpoints'
+                for f_path in p_dir.glob("*.pt"):
+                    collected_paths_str.add(f_path.as_posix())
+    
+    # Sort for consistent order in the dropdown
+    sorted_paths = sorted(list(collected_paths_str))
+    return sorted_paths
 
 
 def process_video(
@@ -24,8 +40,11 @@ def process_video(
     seed,
     enable_upscale,
     sharpness_factor,
-    selected_checkpoint, # Added new argument
+    selected_checkpoint, # Added new argument, will be relative path string or "No checkpoints available"
 ):
+    if selected_checkpoint == "No checkpoints available": # Check for placeholder string
+        raise gr.Error("No checkpoint selected. Please ensure checkpoint files are available and one is selected.")
+
     # Create the temp directory if it doesn't exist
     output_dir = Path("./temp")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -35,8 +54,10 @@ def process_video(
     video_path = video_file_path.absolute().as_posix()
     audio_path = Path(audio_path).absolute().as_posix()
     
-    # Construct the full checkpoint path
-    checkpoint_path = Path("checkpoints") / selected_checkpoint
+    # Construct the full checkpoint path from the selected relative path string
+    checkpoint_file_obj = Path(selected_checkpoint) # selected_checkpoint is now like "checkpoints/model.pt"
+    if not checkpoint_file_obj.exists() or not checkpoint_file_obj.is_file():
+        raise gr.Error(f"Selected checkpoint file not found or is not a file: {selected_checkpoint}")
 
 
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -64,7 +85,7 @@ def process_video(
         seed,
         enable_upscale,
         sharpness_factor,
-        checkpoint_path.absolute().as_posix(), # Pass the selected checkpoint path
+        checkpoint_file_obj.absolute().as_posix(), # Pass the selected checkpoint path (now an absolute path string)
     )
 
     try:
@@ -154,17 +175,24 @@ with gr.Blocks(title="LatentSync demo") as demo:
             audio_input = gr.Audio(label="Input Audio", type="filepath")
             
             # Add checkpoint selection dropdown
-            checkpoint_files = get_checkpoint_files()
-            if not checkpoint_files: # Handle case with no checkpoints
-                checkpoint_files = ["No checkpoints found"]
-                default_checkpoint = "No checkpoints found"
+            checkpoint_files_list = get_checkpoint_files()
+            if not checkpoint_files_list:
+                gr.Warning("No checkpoint files (.pt) found in 'checkpoints/', 'debug/', or 'debug/checkpoints/'. Please add checkpoint files.")
+                dropdown_choices = ["No checkpoints available"]
+                dropdown_default_value = dropdown_choices[0]
             else:
-                # Try to set a sensible default, e.g., 'latentsync_unet.pt' if available
-                default_checkpoint = "latentsync_unet.pt" if "latentsync_unet.pt" in checkpoint_files else checkpoint_files[0]
+                dropdown_choices = checkpoint_files_list
+                preferred_default = "checkpoints/latentsync_unet.pt"
+                if preferred_default in dropdown_choices:
+                    dropdown_default_value = preferred_default
+                else:
+                    # Fallback to the first available if preferred is not found
+                    dropdown_default_value = dropdown_choices[0]
+
 
             checkpoint_dropdown = gr.Dropdown(
-                choices=checkpoint_files,
-                value=default_checkpoint,
+                choices=dropdown_choices,
+                value=dropdown_default_value,
                 label="Select UNet Checkpoint",
             )
 
