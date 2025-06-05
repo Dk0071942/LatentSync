@@ -214,6 +214,7 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
         - **There is currently a limit of 40s of 4k video as longer videos will cause the tool to crash.**
         - **(Optional) Prepare your video with 25 FPS and audio with 16000 Hz to speed up the processing time.**
         - **Make sure the file name does not contain any special characters or spaces.**
+        - **You should consider to interpolate the output video to 50 FPS or more to make it smoother. (TODO: implement this in the future)**
         - **If you encounter any issues, please contact jonathan@goava.ai**
         """
         )
