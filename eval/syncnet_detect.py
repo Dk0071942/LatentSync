@@ -52,17 +52,17 @@ class SyncNetDetector:
 
         if scale:
             scaled_video_path = os.path.join(video_dir, "scaled.mp4")
-            command = f"ffmpeg -loglevel error -y -nostdin -i {video_path} -vf scale='224:224' {scaled_video_path}"
+            command = f"ffmpeg -loglevel error -y -nostdin -i \"{video_path}\" -vf scale='224:224' \"{scaled_video_path}\""
             subprocess.run(command, shell=True)
             video_path = scaled_video_path
 
-        command = f"ffmpeg -y -nostdin -loglevel error -i {video_path} -qscale:v 2 -async 1 -r 25 {os.path.join(video_dir, 'video.mp4')}"
+        command = f"ffmpeg -y -nostdin -loglevel error -i \"{video_path}\" -qscale:v 2 -async 1 -r 25 \"{os.path.join(video_dir, 'video.mp4')}\""
         subprocess.run(command, shell=True, stdout=None)
 
-        command = f"ffmpeg -y -nostdin -loglevel error -i {os.path.join(video_dir, 'video.mp4')} -qscale:v 2 -f image2 {os.path.join(frames_dir, '%06d.jpg')}"
+        command = f"ffmpeg -y -nostdin -loglevel error -i \"{os.path.join(video_dir, 'video.mp4')}\" -qscale:v 2 -f image2 \"{os.path.join(frames_dir, '%06d.jpg')}\""
         subprocess.run(command, shell=True, stdout=None)
 
-        command = f"ffmpeg -y -nostdin -loglevel error -i {os.path.join(video_dir, 'video.mp4')} -ac 1 -vn -acodec pcm_s16le -ar 16000 {os.path.join(video_dir, 'audio.wav')}"
+        command = f"ffmpeg -y -nostdin -loglevel error -i \"{os.path.join(video_dir, 'video.mp4')}\" -ac 1 -vn -acodec pcm_s16le -ar 16000 \"{os.path.join(video_dir, 'audio.wav')}\""
         subprocess.run(command, shell=True, stdout=None)
 
         faces = self.detect_face(frames_dir)
@@ -211,7 +211,7 @@ class SyncNetDetector:
 
         # ========== CROP AUDIO FILE ==========
 
-        command = "ffmpeg -y -nostdin -loglevel error -i %s -ss %.3f -to %.3f %s" % (
+        command = "ffmpeg -y -nostdin -loglevel error -i \"%s\" -ss %.3f -to %.3f \"%s\"" % (
             os.path.join(video_dir, "audio.wav"),
             audiostart,
             audioend,
@@ -223,7 +223,7 @@ class SyncNetDetector:
 
         # ========== COMBINE AUDIO AND VIDEO FILES ==========
 
-        command = "ffmpeg -y -nostdin -loglevel error -i %st.mp4 -i %s -c:v copy -c:a aac %s.mp4" % (
+        command = "ffmpeg -y -nostdin -loglevel error -i \"%st.mp4\" -i \"%s\" -c:v copy -c:a aac \"%s.mp4\"" % (
             cropfile,
             audiotmp,
             cropfile,
