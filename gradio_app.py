@@ -5,9 +5,25 @@ from omegaconf import OmegaConf
 import argparse
 from datetime import datetime
 import os # Added for listing files
+import base64
 
 CONFIG_PATH = Path("configs/unet/stage2.yaml")
 # CHECKPOINT_PATH = Path("checkpoints/latentsync_unet.pt") # Removed, will be dynamic
+
+
+# Helper function to encode image to base64
+def image_to_base64(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode('utf-8')
+
+# Prepare the logo
+try:
+    logo_path = "assets/goAVA_logo.png"
+    logo_base64 = image_to_base64(logo_path)
+    logo_data_uri = f"data:image/png;base64,{logo_base64}"
+except FileNotFoundError:
+    logo_data_uri = "" # Set to empty string if logo not found
+    print("Warning: Logo file not found at assets/goAVA_logo.png. The logo will not be displayed.")
 
 
 # Helper function to get checkpoint files
@@ -199,8 +215,9 @@ body {
 # Create Gradio interface
 with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
     gr.Markdown(
-    """
-    <div style="text-align: center;">
+    f"""
+    <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+        <img src="{logo_data_uri}" alt="goAVA Logo" style="width: 200px; height: auto; margin-bottom: 20px;">
         <h1>go AVA Dubbing Tool</h1>
         <p>Synchronize lip movements in a video with a new audio track.</p>
     </div>
@@ -324,5 +341,5 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=8000,
         inbrowser=False,
-        auth=auth_creds # Pass credentials tuple to enable authentication
+        auth=auth_creds, # Pass credentials tuple to enable authentication
     )
