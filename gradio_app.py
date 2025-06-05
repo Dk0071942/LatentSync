@@ -152,80 +152,143 @@ def create_args(
     return parser.parse_args(args_list)
 
 
+# --- Gradio UI ---
+
+def clear_all():
+    """Clears all input and output fields."""
+    return None, None, None
+
+# CSS for dark theme, inspired by LivePortrait
+dark_theme_css = """
+:root {
+    --primary-50: #eff6ff;
+    --primary-100: #dbeafe;
+    --primary-200: #bfdbfe;
+    --primary-300: #93c5fd;
+    --primary-400: #60a5fa;
+    --primary-500: #3b82f6;
+    --primary-600: #2563eb;
+    --primary-700: #1d4ed8;
+    --primary-800: #1e40af;
+    --primary-900: #1e3a8a;
+    --primary-950: #172554;
+    --secondary-500: #8b5cf6;
+}
+body {
+    background-color: #0B0F19;
+    color: white;
+}
+.gradio-container {
+    background-color: #0B0F19;
+}
+.gradio-group, .gradio-accordion {
+    border: 1px solid #374151; /* neutral-700 */
+    background-color: #1F2937; /* neutral-800 */
+    border-radius: 8px;
+}
+.gradio-button {
+    background-color: #4F46E5; /* A shade of purple/blue */
+    color: white;
+    border: none;
+}
+.gradio-button:hover {
+    background-color: #6366F1;
+}
+"""
+
 # Create Gradio interface
-with gr.Blocks(title="LatentSync demo") as demo:
+with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
     gr.Markdown(
     """
-    <h1 align="center">LatentSync</h1>
-
-    <div style="display:flex;justify-content:center;column-gap:4px;">
-        <a href="https://github.com/bytedance/LatentSync">
-            <img src='https://img.shields.io/badge/GitHub-Repo-blue'>
-        </a> 
-        <a href="https://arxiv.org/abs/2412.09262">
-            <img src='https://img.shields.io/badge/arXiv-Paper-red'>
-        </a>
+    <div style="text-align: center;">
+        <h1>go AVA Dubbing Tool</h1>
+        <p>Synchronize lip movements in a video with a new audio track.</p>
     </div>
     """
     )
+    
+    with gr.Accordion("Notices and Best Practices", open=True):
+        gr.Markdown(
+        """
+        - **Audio/Video Matching:** For best results, select audio and video of similar length. The tool syncs mouth movements to the new audio by matching speech and silence, so a close match is ideal.
+        - **There is currently a limit of 40s of 4k video as longer videos will cause the tool to crash.**
+        - **(Optional) Prepare your video with 25 FPS and audio with 16000 Hz to speed up the processing time.**
+        - **Make sure the file name does not contain any special characters or spaces.**
+        - **If you encounter any issues, please contact jonathan@goava.ai**
+        """
+        )
 
     with gr.Row():
         with gr.Column():
-            video_input = gr.Video(label="Input Video")
-            audio_input = gr.Audio(label="Input Audio", type="filepath")
-            
-            # Add checkpoint selection dropdown
-            checkpoint_files_list = get_checkpoint_files()
-            if not checkpoint_files_list:
-                gr.Warning("No checkpoint files (.pt) found in 'checkpoints/', 'debug/', or 'debug/checkpoints/'. Please add checkpoint files.")
-                dropdown_choices = ["No checkpoints available"]
-                dropdown_default_value = dropdown_choices[0]
-            else:
-                dropdown_choices = checkpoint_files_list
-                preferred_default = "checkpoints/latentsync_unet.pt"
-                if preferred_default in dropdown_choices:
-                    dropdown_default_value = preferred_default
-                else:
-                    # Fallback to the first available if preferred is not found
-                    dropdown_default_value = dropdown_choices[0]
+            gr.Markdown("### Step 1: Upload Source Video")
+            video_input = gr.Video(label="Source Video")
+        with gr.Column():
+            gr.Markdown("### Step 2: Upload Target Audio")
+            audio_input = gr.Audio(label="Target Audio", type="filepath")
 
+    # Add checkpoint selection dropdown logic
+    checkpoint_files_list = get_checkpoint_files()
+    if not checkpoint_files_list:
+        gr.Warning("No checkpoint files (.pt) found. Please add checkpoint files.")
+        dropdown_choices = ["No checkpoints available"]
+        dropdown_default_value = dropdown_choices[0]
+    else:
+        dropdown_choices = checkpoint_files_list
+        preferred_default = "checkpoints/latentsync_unet.pt"
+        if preferred_default in dropdown_choices:
+            dropdown_default_value = preferred_default
+        else:
+            dropdown_default_value = dropdown_choices[0]
 
+    with gr.Accordion("Advanced Options & Checkpoint Selection", open=False):
+        with gr.Group():
+            gr.Markdown(
+                """
+                - **Checkpoint Selection:** Use character-specific checkpoints if available (e.g., `debug/unet/character_name/checkpoint-10000.pt`). The number indicates training steps; higher usually means better, but feel free to experiment.
+                """
+                )
             checkpoint_dropdown = gr.Dropdown(
                 choices=dropdown_choices,
                 value=dropdown_default_value,
-                label="Select UNet Checkpoint",
+                label="UNet Checkpoint",
             )
-
+        with gr.Group():
+            gr.Markdown("Adjust generation parameters.")
             with gr.Row():
-                guidance_scale = gr.Slider(
-                    minimum=1.0,
-                    maximum=2.5,
-                    value=1.2,
-                    step=0.1,
-                    label="Guidance Scale",
-                )
-                inference_steps = gr.Slider(minimum=10, maximum=50, value=50, step=1, label="Inference Steps")
-            with gr.Row():  
+                 guidance_scale = gr.Slider(minimum=1.0, maximum=2.5, value=1.2, step=0.1, label="Guidance Scale")
+                 inference_steps = gr.Slider(minimum=10, maximum=50, value=50, step=1, label="Inference Steps")
+            gr.Markdown(
+                """
+                - **Guidance Scale:** Controls how strictly the lip movements follow the audio.
+                - **Inference Steps:** More steps can improve quality but increase processing time.
+                """
+            )
+            with gr.Row():
                 enable_upscale = gr.Checkbox(value=True, label="Enable Upscale")
                 sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=7.5, step=0.5, label="Sharpness Factor")
-
-            with gr.Row():
-                seed = gr.Number(value=1247, label="Random Seed", precision=0)
-
-            process_btn = gr.Button("Process Video")
-
-        with gr.Column():
-            video_output = gr.Video(label="Output Video")
-
-            gr.Examples(
-                examples=[
-                    ["assets/demo1_video.mp4", "assets/demo1_audio.wav"],
-                    ["assets/demo2_video.mp4", "assets/demo2_audio.wav"],
-                    ["assets/demo3_video.mp4", "assets/demo3_audio.wav"],
-                ],
-                inputs=[video_input, audio_input],
+            gr.Markdown(
+                """
+                - **Enable Upscale:** Upscales the output video resolution.
+                - **Sharpness Factor:** Adjusts sharpness of the upscaled video.
+                """
+            )
+            seed = gr.Number(value=1247, label="Random Seed", precision=0)
+            gr.Markdown(
+                """
+                - **Random Seed:** A fixed seed ensures reproducible results for the same inputs.
+                """
             )
 
+    with gr.Row():
+        clear_btn = gr.Button("Clear")
+        process_btn = gr.Button("Process Video", variant="primary")
+
+    with gr.Column():
+        gr.Markdown("### Step 3: View Dubbed Video")
+        video_output = gr.Video(label="Output Video")
+
+
+    # --- Button Clicks ---
     process_btn.click(
         fn=process_video,
         inputs=[
@@ -236,10 +299,13 @@ with gr.Blocks(title="LatentSync demo") as demo:
             seed,
             enable_upscale,
             sharpness_factor,
-            checkpoint_dropdown, # Add checkpoint_dropdown to inputs
+            checkpoint_dropdown,
         ],
         outputs=video_output,
     )
+    
+    clear_btn.click(fn=clear_all, inputs=None, outputs=[video_input, audio_input, video_output])
+
 
 if __name__ == "__main__":
     # --- Authentication ---
