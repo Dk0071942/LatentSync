@@ -241,7 +241,7 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
         else:
             dropdown_default_value = dropdown_choices[0]
 
-    with gr.Accordion("Advanced Options & Checkpoint Selection", open=False):
+    with gr.Accordion("Advanced Options & Checkpoint Selection", open=True):
         with gr.Group():
             gr.Markdown(
                 """
@@ -256,7 +256,7 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
         with gr.Group():
             gr.Markdown("Adjust generation parameters.")
             with gr.Row():
-                 guidance_scale = gr.Slider(minimum=1.0, maximum=2.5, value=1.2, step=0.1, label="Guidance Scale")
+                 guidance_scale = gr.Slider(minimum=1.0, maximum=2.5, value=2.5, step=0.1, label="Guidance Scale")
                  inference_steps = gr.Slider(minimum=10, maximum=50, value=50, step=1, label="Inference Steps")
             gr.Markdown(
                 """
