@@ -7,7 +7,10 @@ from datetime import datetime
 import os # Added for listing files
 import base64
 
-CONFIG_PATH = Path("configs/unet/stage2.yaml")
+# Get the directory of the current script to build absolute paths
+script_dir = Path(__file__).parent.resolve()
+
+CONFIG_PATH = script_dir / "configs/unet/stage2.yaml"
 # CHECKPOINT_PATH = Path("checkpoints/latentsync_unet.pt") # Removed, will be dynamic
 
 
@@ -18,19 +21,20 @@ def image_to_base64(image_path):
 
 # Prepare the logo
 try:
-    logo_path = "assets/goAVA_logo.png"
+    logo_path = script_dir / "assets/goAVA_logo.png"
     logo_base64 = image_to_base64(logo_path)
     logo_data_uri = f"data:image/png;base64,{logo_base64}"
 except FileNotFoundError:
     logo_data_uri = "" # Set to empty string if logo not found
-    print("Warning: Logo file not found at assets/goAVA_logo.png. The logo will not be displayed.")
+    print(f"Warning: Logo file not found at {logo_path}. The logo will not be displayed.")
 
 
 # Helper function to get checkpoint files
 def get_checkpoint_files():
+    # Use script_dir to build absolute paths for scanning
     base_dirs_to_scan = [
-        Path("checkpoints"),
-        Path("debug"),
+        script_dir / "checkpoints",
+        script_dir / "debug",
     ]
     collected_paths_str = set()
 
@@ -61,8 +65,8 @@ def process_video(
     if selected_checkpoint == "No checkpoints available": # Check for placeholder string
         raise gr.Error("No checkpoint selected. Please ensure checkpoint files are available and one is selected.")
 
-    # Create the temp directory if it doesn't exist
-    output_dir = Path("./temp")
+    # Create the temp directory if it doesn't exist, relative to the script's location
+    output_dir = script_dir / "temp"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Convert paths to absolute Path objects and normalize them
@@ -142,7 +146,7 @@ def create_args(
     # Build the argument list dynamically
     args_list = [
         "--unet_config_path",
-        CONFIG_PATH.absolute().as_posix(),
+        CONFIG_PATH.as_posix(),
         "--inference_ckpt_path",
         checkpoint_path, # Use the passed checkpoint_path
         "--video_path",
