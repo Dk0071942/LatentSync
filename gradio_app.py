@@ -42,10 +42,12 @@ def get_checkpoint_files():
         if p_dir.exists() and p_dir.is_dir(): # Ensure directory exists
             if p_dir.name == "debug": # Recursive search for 'debug' directory
                 for f_path in p_dir.rglob("*.pt"):
-                    collected_paths_str.add(f_path.as_posix())
+                    # Store path as a string, relative to the script directory
+                    collected_paths_str.add(f_path.relative_to(script_dir).as_posix())
             else: # Non-recursive for other specified dirs like 'checkpoints'
                 for f_path in p_dir.glob("*.pt"):
-                    collected_paths_str.add(f_path.as_posix())
+                    # Store path as a string, relative to the script directory
+                    collected_paths_str.add(f_path.relative_to(script_dir).as_posix())
     
     # Sort for consistent order in the dropdown
     sorted_paths = sorted(list(collected_paths_str))
@@ -74,10 +76,10 @@ def process_video(
     video_path = video_file_path.absolute().as_posix()
     audio_path = Path(audio_path).absolute().as_posix()
     
-    # Construct the full checkpoint path from the selected relative path string
-    checkpoint_file_obj = Path(selected_checkpoint) # selected_checkpoint is now like "checkpoints/model.pt"
+    # Reconstruct the full, absolute checkpoint path from the selected relative path string
+    checkpoint_file_obj = script_dir / selected_checkpoint
     if not checkpoint_file_obj.exists() or not checkpoint_file_obj.is_file():
-        raise gr.Error(f"Selected checkpoint file not found or is not a file: {selected_checkpoint}")
+        raise gr.Error(f"Selected checkpoint file not found or is not a file: {checkpoint_file_obj}")
 
 
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -105,7 +107,7 @@ def process_video(
         seed,
         enable_upscale,
         sharpness_factor,
-        checkpoint_file_obj.absolute().as_posix(), # Pass the selected checkpoint path (now an absolute path string)
+        checkpoint_file_obj.as_posix(), # Pass the selected checkpoint path (now an absolute path string)
     )
 
     try:
