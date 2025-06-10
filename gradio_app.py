@@ -21,7 +21,7 @@ def image_to_base64(image_path):
 
 # Prepare the logo
 try:
-    logo_path = script_dir / "assets/goAVA_logo.png"
+    logo_path = script_dir / "assets/goAVA_Logo.png"
     logo_base64 = image_to_base64(logo_path)
     logo_data_uri = f"data:image/png;base64,{logo_base64}"
 except FileNotFoundError:
