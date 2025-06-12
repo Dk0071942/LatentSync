@@ -119,11 +119,20 @@ class AlignRestore(object):
         points2_normalized = points2_centered / s2
 
         covariance = torch.matmul(points1_normalized.T, points2_normalized)
-        U, S, V = torch.svd(covariance)
+        # Ensure covariance is float32 for SVD on CUDA
+        if covariance.device.type == 'cuda' and covariance.dtype == torch.half:
+            U, S, V = torch.svd(covariance.float())
+        else:
+            U, S, V = torch.svd(covariance)
 
         R = torch.matmul(V, U.T)
 
-        det = torch.det(R)
+        # Ensure R is float32 for det on CUDA
+        if R.device.type == 'cuda' and R.dtype == torch.half:
+            det = torch.det(R.float())
+        else:
+            det = torch.det(R)
+
         if det < 0:
             V[:, -1] = -V[:, -1]
             R = torch.matmul(V, U.T)

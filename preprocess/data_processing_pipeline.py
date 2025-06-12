@@ -14,6 +14,7 @@
 
 import argparse
 import os
+import shutil
 from preprocess.affine_transform import affine_transform_multi_gpus
 from preprocess.remove_broken_videos import remove_broken_videos_multiprocessing
 from preprocess.detect_shot import detect_shot_multiprocessing
@@ -29,6 +30,21 @@ from latentsync.utils.util import check_model_and_download
 def data_processing_pipeline(
     total_num_workers, per_gpu_num_workers, resolution, sync_conf_threshold, temp_dir, input_dir
 ):
+    # Clean up intermediate directories from previous runs
+    base_output_dir = os.path.dirname(input_dir)
+    dirs_to_remove = [
+        os.path.join(base_output_dir, "resampled"),
+        os.path.join(base_output_dir, "shot"),
+        os.path.join(base_output_dir, "segmented"),
+        os.path.join(base_output_dir, "affine_transformed"),
+        os.path.join(base_output_dir, f"av_synced_{sync_conf_threshold}"),
+        temp_dir # Also clean the specified temp_dir
+    ]
+    for dir_path in dirs_to_remove:
+        if os.path.exists(dir_path):
+            print(f"Removing existing directory: {dir_path}")
+            shutil.rmtree(dir_path)
+
     print("Checking models are downloaded...")
     check_model_and_download("checkpoints/auxiliary/syncnet_v2.model")
     check_model_and_download("checkpoints/auxiliary/sfd_face.pth")

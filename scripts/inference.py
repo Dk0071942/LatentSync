@@ -58,27 +58,24 @@ def main(config, args):
     vae.config.scaling_factor = 0.18215
     vae.config.shift_factor = 0
 
-    denoising_unet, _ = UNet3DConditionModel.from_pretrained(
+    unet, _ = UNet3DConditionModel.from_pretrained(
         OmegaConf.to_container(config.model),
         args.inference_ckpt_path,
         device="cpu",
     )
 
-    denoising_unet = denoising_unet.to(dtype=dtype)
+    unet = unet.to(dtype=dtype)
 
     pipeline = LipsyncPipeline(
         vae=vae,
         audio_encoder=audio_encoder,
-        unet=denoising_unet,
+        unet=unet,
         scheduler=scheduler,
     ).to("cuda")
 
     # use DeepCache
     helper = DeepCacheSDHelper(pipe=pipeline)
-    helper.set_params(
-        cache_interval=3,
-        cache_branch_id=0,
-    )
+    helper.set_params(cache_interval=3, cache_branch_id=0)
     helper.enable()
 
     if args.seed != -1:

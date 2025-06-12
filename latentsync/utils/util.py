@@ -49,9 +49,7 @@ def read_video(video_path: str, change_fps=True, use_decord=True):
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
-        command = (
-            f"ffmpeg -loglevel error -y -nostdin -i {video_path} -r 25 -crf 18 {os.path.join(temp_dir, 'video.mp4')}"
-        )
+        command = f'ffmpeg -loglevel error -y -nostdin -i "{video_path}" -r 25 -crf 18 "{os.path.join(temp_dir, "video.mp4")}"'
         subprocess.run(command, shell=True)
         target_video_path = os.path.join(temp_dir, "video.mp4")
     else:
@@ -279,3 +277,11 @@ def check_model_and_download(ckpt_path: str, huggingface_model_id: str = "ByteDa
         ckpt_path_obj = Path(ckpt_path)
         download_cmd = f"huggingface-cli download {huggingface_model_id} {Path(*ckpt_path_obj.parts[1:])} --local-dir {Path(ckpt_path_obj.parts[0])}"
         subprocess.run(download_cmd, shell=True)
+
+
+class dummy_context:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args):
+        pass

@@ -26,7 +26,12 @@ paths = []
 
 
 def gather_paths(input_dir, output_dir):
-    # os.makedirs(output_dir, exist_ok=True)
+    # Check if input_dir exists before trying to list its contents
+    if not os.path.exists(input_dir):
+        print(f"Warning: Input directory {input_dir} not found in gather_paths. Skipping.")
+        return
+
+    # os.makedirs(output_dir, exist_ok=True) # Output dir creation is handled in func
 
     for video in tqdm.tqdm(sorted(os.listdir(input_dir))):
         if video.endswith(".mp4"):
@@ -40,7 +45,7 @@ def gather_paths(input_dir, output_dir):
 
 
 def adjust_offset(video_input: str, video_output: str, av_offset: int, fps: int = 25):
-    command = f"ffmpeg -loglevel error -y -i {video_input} -itsoffset {av_offset/fps} -i {video_input} -map 0:v -map 1:a -c copy -q:v 0 -q:a 0 {video_output}"
+    command = f"ffmpeg -loglevel error -y -i \"{video_input}\" -itsoffset {av_offset/fps} -i \"{video_input}\" -map 0:v -map 1:a -c copy -q:v 0 -q:a 0 \"{video_output}\""
     subprocess.run(command, shell=True)
 
 
@@ -78,7 +83,20 @@ def split(a, n):
 
 
 def sync_av_multi_gpus(input_dir, output_dir, temp_dir, num_workers, sync_conf_threshold):
+    global paths
+    paths = [] # Clear global paths list
+
+    print(f"Recursively gathering video paths from {input_dir} ...")
+    if not os.path.exists(input_dir):
+        print(f"Warning: Input directory {input_dir} for sync_av does not exist. No videos to process.")
+        return
+
     gather_paths(input_dir, output_dir)
+
+    if not paths:
+        print(f"Warning: No video paths found in {input_dir} for sync_av. No videos to process.")
+        return
+
     num_devices = torch.cuda.device_count()
     if num_devices == 0:
         raise RuntimeError("No GPUs found")
