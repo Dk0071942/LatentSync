@@ -391,6 +391,12 @@ def main(config):
 
             if config.model.add_audio_layer and config.run.use_syncnet:
                 if config.run.pixel_space_supervise:
+                    if config.data.resolution != syncnet_config.data.resolution:
+                        pred_pixel_values = F.interpolate(
+                            pred_pixel_values,
+                            size=(syncnet_config.data.resolution, syncnet_config.data.resolution),
+                            mode="bicubic",
+                        )
                     syncnet_input = rearrange(
                         pred_pixel_values, "(b f) c h w -> b (f c) h w", f=config.data.num_frames
                     )
