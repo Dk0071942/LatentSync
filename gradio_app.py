@@ -10,8 +10,7 @@ import base64
 # Get the directory of the current script to build absolute paths
 script_dir = Path(__file__).parent.resolve()
 
-CONFIG_PATH = script_dir / "configs/unet/stage2.yaml"
-# CHECKPOINT_PATH = Path("checkpoints/latentsync_unet.pt") # Removed, will be dynamic
+# CONFIG_PATH is now determined dynamically based on user selection in the UI.
 
 
 # Helper function to encode image to base64
@@ -40,14 +39,9 @@ def get_checkpoint_files():
 
     for p_dir in base_dirs_to_scan:
         if p_dir.exists() and p_dir.is_dir(): # Ensure directory exists
-            if p_dir.name == "debug": # Recursive search for 'debug' directory
-                for f_path in p_dir.rglob("*.pt"):
-                    # Store path as a string, relative to the script directory
-                    collected_paths_str.add(f_path.relative_to(script_dir).as_posix())
-            else: # Non-recursive for other specified dirs like 'checkpoints'
-                for f_path in p_dir.glob("*.pt"):
-                    # Store path as a string, relative to the script directory
-                    collected_paths_str.add(f_path.relative_to(script_dir).as_posix())
+            for f_path in p_dir.rglob("*.pt"):
+                # Store path as a string, relative to the script directory
+                collected_paths_str.add(f_path.relative_to(script_dir).as_posix())
     
     # Sort for consistent order in the dropdown
     sorted_paths = sorted(list(collected_paths_str))
@@ -63,6 +57,7 @@ def process_video(
     enable_upscale,
     sharpness_factor,
     selected_checkpoint, # Added new argument, will be relative path string or "No checkpoints available"
+    resolution,
 ):
     if selected_checkpoint == "No checkpoints available": # Check for placeholder string
         raise gr.Error("No checkpoint selected. Please ensure checkpoint files are available and one is selected.")
@@ -82,11 +77,23 @@ def process_video(
         raise gr.Error(f"Selected checkpoint file not found or is not a file: {checkpoint_file_obj}")
 
 
+    # Determine config path based on resolution
+    if resolution == 256:
+        config_path = script_dir / "configs/unet/stage2.yaml"
+    elif resolution == 512:
+        config_path = script_dir / "configs/unet/stage2_512.yaml"
+    else:
+        raise gr.Error(f"Unsupported resolution: {resolution}. Please select 256 or 512.")
+
+    if not config_path.exists():
+        raise gr.Error(f"Configuration file for resolution {resolution} not found at {config_path}")
+
+
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # Set the output path for the processed video
     output_path = str(output_dir / f"{video_file_path.stem}_{current_time}.mp4") # Change the filename as needed
 
-    config = OmegaConf.load(CONFIG_PATH)
+    config = OmegaConf.load(config_path)
 
     config["run"].update(
         {
@@ -108,6 +115,7 @@ def process_video(
         enable_upscale,
         sharpness_factor,
         checkpoint_file_obj.as_posix(), # Pass the selected checkpoint path (now an absolute path string)
+        config_path.as_posix(),
     )
 
     try:
@@ -132,6 +140,7 @@ def create_args(
     enable_upscale: bool,
     sharpness_factor: float,
     checkpoint_path: str, # Added new argument
+    unet_config_path: str,
 ) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--unet_config_path", type=str, default="configs/unet.yaml")
@@ -148,7 +157,7 @@ def create_args(
     # Build the argument list dynamically
     args_list = [
         "--unet_config_path",
-        CONFIG_PATH.as_posix(),
+        unet_config_path,
         "--inference_ckpt_path",
         checkpoint_path, # Use the passed checkpoint_path
         "--video_path",
@@ -258,7 +267,7 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
         dropdown_default_value = dropdown_choices[0]
     else:
         dropdown_choices = checkpoint_files_list
-        preferred_default = "checkpoints/latentsync_unet.pt"
+        preferred_default = "checkpoints/1.5/latentsync_unet.pt"
         if preferred_default in dropdown_choices:
             dropdown_default_value = preferred_default
         else:
@@ -268,13 +277,21 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
         with gr.Group():
             gr.Markdown(
                 """
-                - **Checkpoint Selection:** Use character-specific checkpoints if available (e.g., `debug/unet/character_name/checkpoint-10000.pt`). The number indicates training steps; higher usually means better, but feel free to experiment.
+                - **Checkpoint Selection:** Use character-specific checkpoints if available (e.g., `debug/unet/character_name/checkpoint-10000.pt`). The number indicates training steps; higher usually means better, but feel free to experiment. 1.5 version checkpoints are for 256 resolution and 1.6 version checkpoints are for 512 resolution. The 1.6 checkpoints provide better quality but are slower to process.
                 """
                 )
             checkpoint_dropdown = gr.Dropdown(
                 choices=dropdown_choices,
                 value=dropdown_default_value,
                 label="UNet Checkpoint",
+            )
+        with gr.Group():
+            gr.Markdown("Select generation resolution. **Ensure your selected checkpoint matches the resolution.**")
+            resolution_input = gr.Radio(
+                [256, 512],
+                value=256,
+                label="Resolution",
+                info="For 1.5 version checkpoints, use 256. For 1.6 version checkpoints, use 512."
             )
         with gr.Group():
             gr.Markdown("Adjust generation parameters.")
@@ -324,6 +341,7 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
             enable_upscale,
             sharpness_factor,
             checkpoint_dropdown,
+            resolution_input,
         ],
         outputs=video_output,
     )
