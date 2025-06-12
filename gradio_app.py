@@ -267,7 +267,7 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
         dropdown_default_value = dropdown_choices[0]
     else:
         dropdown_choices = checkpoint_files_list
-        preferred_default = "checkpoints/1.5/latentsync_unet.pt"
+        preferred_default = "checkpoints/1.5/default_unet.pt"
         if preferred_default in dropdown_choices:
             dropdown_default_value = preferred_default
         else:
