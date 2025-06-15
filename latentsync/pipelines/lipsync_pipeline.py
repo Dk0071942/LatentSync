@@ -6,6 +6,7 @@ import os
 import shutil
 from typing import Callable, List, Optional, Union
 import subprocess
+import torch.nn.functional as F
 
 import numpy as np
 import torch
@@ -527,6 +528,29 @@ class LipsyncPipeline(DiffusionPipeline):
             if self.unet.add_audio_layer:
                 audio_embeds = torch.stack(whisper_chunks[i * num_frames : (i + 1) * num_frames])
                 audio_embeds = audio_embeds.to(device, dtype=weight_dtype)
+                
+                # Get current chunk of faces and flags
+                current_chunk_faces = faces[i * num_frames : (i + 1) * num_frames]
+                current_chunk_flags = face_detected_flags[i * num_frames : (i + 1) * num_frames]
+                
+                # Filter for valid faces in the chunk
+                valid_faces_in_chunk = [face for face, flag in zip(current_chunk_faces, current_chunk_flags) if flag]
+                
+                # If we have valid faces, ensure audio features match their count
+                if valid_faces_in_chunk:
+                    if len(valid_faces_in_chunk) != audio_embeds.shape[0]:
+                        # audio_embeds shape: (frames, seq_len, features)
+                        # permute to (seq_len, features, frames) to interpolate over frames.
+                        audio_embeds_permuted = audio_embeds.permute(1, 2, 0)
+                        audio_embeds_interpolated = F.interpolate(
+                            audio_embeds_permuted,
+                            size=len(valid_faces_in_chunk),
+                            mode="linear",
+                            align_corners=False,
+                        )
+                        # permute back to (frames, seq_len, features)
+                        audio_embeds = audio_embeds_interpolated.permute(2, 0, 1)
+
                 if do_classifier_free_guidance:
                     null_audio_embeds = torch.zeros_like(audio_embeds)
                     audio_embeds = torch.cat([null_audio_embeds, audio_embeds])
