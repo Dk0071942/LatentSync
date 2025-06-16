@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - 'main'
+  pull_request:
+    branches:
+      - 'main'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Build Docker image
+      run: docker build -t latentsync-test .
+
+    - name: Create output directory
+      run: mkdir output
+
+    - name: Run inference test
+      run: |
+        docker run --gpus all \
+          -v ./assets:/app/assets \
+          -v ./output:/app/output \
+          latentsync-test \
+          python3 scripts/inference.py \
+            --unet_config_path configs/unet/stage2.yaml \
+            --inference_ckpt_path checkpoints/latentsync_unet.pt \
+            --video_path assets/test_1_video.mp4 \
+            --audio_path assets/test_1_audio.wav \
+            --video_out_path output/test_1_video_processed.mp4
+
+    - name: Check for output file
+      run: |
+        if [ -s "output/test_1_video_processed.mp4" ]; then
+          echo "Output file exists and is not empty."
+        else
+          echo "Output file does not exist or is empty."
+          exit 1
+        fi 
