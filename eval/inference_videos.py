@@ -54,7 +54,10 @@ def inference_video_from_fileslist(
         video_name = os.path.basename(video_path)[:-4]
         audio_name = os.path.basename(audio_path)[:-4]
         video_out_path = os.path.join(output_dir, f"{video_name}__{audio_name}.mp4")
-        inference_command = f"python -m scripts.inference --guidance_scale {guidance_scale} --unet_config_path {unet_config_path} --video_path {video_path} --audio_path {audio_path} --video_out_path {video_out_path} --inference_ckpt_path {ckpt_path}"
+        inference_command = (
+            f"python -m scripts.inference --enable_deepcache --guidance_scale {guidance_scale} --unet_config_path {unet_config_path} "
+            f"--video_path {video_path} --audio_path {audio_path} --video_out_path {video_out_path} --inference_ckpt_path {ckpt_path}"
+        )
         subprocess.run(inference_command, shell=True)
 
 
@@ -63,7 +66,7 @@ if __name__ == "__main__":
     audio_fileslist = "/mnt/bn/maliva-gen-ai-v2/chunyu.li/fileslist/audio_fileslist.txt"
     output_dir = "/mnt/bn/maliva-gen-ai-v2/chunyu.li/inference_videos_results"
 
-    unet_config_path = "configs/unet/stage2.yaml"
+    unet_config_path = "configs/unet/stage2_512.yaml"
     ckpt_path = "checkpoints/latentsync_unet.pt"
     guidance_scale = 1.5
 

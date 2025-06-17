@@ -475,14 +475,12 @@ def main(config):
                 logger.info("Running validation... ")
 
                 validation_video_out_path = os.path.join(output_dir, f"val_videos/val_video_{global_step}.mp4")
-                validation_video_mask_path = os.path.join(output_dir, f"val_videos/val_video_mask.mp4")
 
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     pipeline(
                         config.data.val_video_path,
                         config.data.val_audio_path,
                         validation_video_out_path,
-                        validation_video_mask_path,
                         num_frames=config.data.num_frames,
                         num_inference_steps=config.run.inference_steps,
                         guidance_scale=config.run.guidance_scale,
