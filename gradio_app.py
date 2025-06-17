@@ -177,7 +177,7 @@ def create_args(
         "--sharpness_factor",
         str(sharpness_factor),
         "--temp_dir",
-        "--temp",
+        "temp",
         "--enable_deepcache",
     ]
     # Add the flag only if enable_upscale is True
