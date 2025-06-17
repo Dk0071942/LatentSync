@@ -25,3 +25,4 @@ onnxruntime-gpu==1.21.0
 git+https://github.com/XPixelGroup/BasicSR.git
 git+https://github.com/xinntao/Real-ESRGAN.git
 DeepCache==0.1.1
+albumentations==2.0.8
