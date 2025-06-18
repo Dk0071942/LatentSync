@@ -60,15 +60,21 @@ logger = get_logger(__name__)
 def main(config):
     # Initialize distributed training
     local_rank = init_dist()
-    global_rank = dist.get_rank()
-    num_processes = dist.get_world_size()
+
+    if dist.is_initialized():
+        global_rank = dist.get_rank()
+        num_processes = dist.get_world_size()
+    else:
+        global_rank = 0
+        num_processes = 1
+
     is_main_process = global_rank == 0
 
     seed = config.run.seed + global_rank
     set_seed(seed)
 
     # Logging folder
-    folder_name = "train" + datetime.datetime.now().strftime(f"-%Y_%m_%d-%H:%M:%S")
+    folder_name = "train" + datetime.datetime.now().strftime(f"-%Y_%m_%d-%H-%M-%S")
     output_dir = os.path.join(config.data.train_output_dir, folder_name)
 
     # Make one log on every process with the configuration for debugging.
@@ -88,7 +94,10 @@ def main(config):
         shutil.copy(config.unet_config_path, output_dir)
         shutil.copy(config.data.syncnet_config_path, output_dir)
 
-    device = torch.device(local_rank)
+    if local_rank == -1:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(local_rank)
 
     noise_scheduler = DDIMScheduler.from_pretrained("configs")
 
@@ -221,7 +230,8 @@ def main(config):
     pipeline.set_progress_bar_config(disable=True)
 
     # DDP warpper
-    unet = DDP(unet, device_ids=[local_rank], output_device=local_rank)
+    if dist.is_initialized():
+        unet = DDP(unet, device_ids=[local_rank], output_device=local_rank)
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader))
@@ -448,53 +458,54 @@ def main(config):
 
             ### <<<< Training <<<< ###
 
-            # Save checkpoint and conduct validation
-            if is_main_process and (global_step % config.ckpt.save_ckpt_steps == 0):
-                model_save_path = os.path.join(output_dir, f"checkpoints/checkpoint-{global_step}.pt")
-                state_dict = {
-                    "global_step": global_step,
-                    "state_dict": unet.module.state_dict(),
-                }
-                try:
-                    torch.save(state_dict, model_save_path)
-                    logger.info(f"Saved checkpoint to {model_save_path}")
-                except Exception as e:
-                    logger.error(f"Error saving model: {e}")
-
-                # Validation
-                logger.info("Running validation... ")
-
-                validation_video_out_path = os.path.join(output_dir, f"val_videos/val_video_{global_step}.mp4")
-
-                with torch.autocast(device_type="cuda", dtype=torch.float16):
-                    pipeline(
-                        config.data.val_video_path,
-                        config.data.val_audio_path,
-                        validation_video_out_path,
-                        num_frames=config.data.num_frames,
-                        num_inference_steps=config.run.inference_steps,
-                        guidance_scale=config.run.guidance_scale,
-                        weight_dtype=torch.float16,
-                        width=config.data.resolution,
-                        height=config.data.resolution,
-                        mask_image_path=config.data.mask_image_path,
+            # Save checkpoint
+            if is_main_process:
+                if (global_step + 1) % config.ckpt.save_ckpt_steps == 0 or (global_step + 1) == config.run.max_train_steps:
+                    save_path = os.path.join(output_dir, "checkpoints", f"step_{global_step+1}.pt")
+                    torch.save(
+                        {
+                            "global_step": global_step + 1,
+                            "state_dict": unet.module.state_dict() if dist.is_initialized() else unet.state_dict(),
+                        },
+                        save_path,
                     )
+                    logger.info(f"Saved state to {save_path}")
 
-                logger.info(f"Saved validation video output to {validation_video_out_path}")
+                    # Validation
+                    if config.run.pixel_space_supervise:
+                        validation_video_out_path = os.path.join(
+                            output_dir, f"val_videos/val_video_{global_step+1}.mp4"
+                        )
 
-                val_step_list.append(global_step)
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            pipeline(
+                                config.data.val_video_path,
+                                config.data.val_audio_path,
+                                validation_video_out_path,
+                                num_frames=config.data.num_frames,
+                                num_inference_steps=config.run.inference_steps,
+                                guidance_scale=config.run.guidance_scale,
+                                weight_dtype=torch.float16,
+                                width=config.data.resolution,
+                                height=config.data.resolution,
+                                mask_image_path=config.data.mask_image_path,
+                            )
 
-                if config.model.add_audio_layer and os.path.exists(validation_video_out_path):
-                    try:
-                        _, conf = syncnet_eval(syncnet_eval_model, syncnet_detector, validation_video_out_path, "temp")
-                    except Exception as e:
-                        logger.info(e)
-                        conf = 0
-                    sync_conf_list.append(conf)
-                    plot_loss_chart(
-                        os.path.join(output_dir, f"sync_conf_results/sync_conf_chart-{global_step}.png"),
-                        ("Sync confidence", val_step_list, sync_conf_list),
-                    )
+                        logger.info(f"Saved validation video output to {validation_video_out_path}")
+
+                        val_step_list.append(global_step)
+
+                        if config.model.add_audio_layer and os.path.exists(validation_video_out_path):
+                            try:
+                                _, conf = syncnet_eval(syncnet_eval_model, syncnet_detector, validation_video_out_path, "temp")
+                            except Exception as e:
+                                logger.info(e)
+                                conf = 0
+                            sync_conf_list.append(conf)
+                            plot_loss_chart(
+                                os.path.join(output_dir, f"sync_conf_results/sync_conf_chart-{global_step}.png"),
+                                ("Sync confidence", val_step_list, sync_conf_list),
+                            )
 
             logs = {"step_loss": loss.item(), "epoch": epoch}
             progress_bar.set_postfix(**logs)
@@ -503,7 +514,8 @@ def main(config):
                 break
 
     progress_bar.close()
-    dist.destroy_process_group()
+    if dist.is_initialized():
+        dist.destroy_process_group()
 
 
 if __name__ == "__main__":
