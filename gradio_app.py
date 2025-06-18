@@ -17,11 +17,11 @@ if rife_dir.exists() and str(rife_dir) not in sys.path:
 
 # Import the main function from our new script
 try:
-    from run_interpolation import main_interpolate as run_rife_interpolation
+    from run_interpolation import main_interpolate as run_video_interpolation
 except ImportError as e:
-    print(f"Could not import RIFE interpolation script: {e}")
+    print(f"Could not import video interpolation script: {e}")
     # Define a dummy function to prevent the app from crashing if RIFE is not set up
-    def run_rife_interpolation(*args, **kwargs):
+    def run_video_interpolation(*args, **kwargs):
         raise RuntimeError("RIFE submodule not found or not set up correctly. Please check the 'ECCV2022-RIFE' directory.")
 
 # --- End RIFE Integration ---
@@ -148,16 +148,16 @@ def process_video(
         if enable_interpolation:
             print("Interpolating video to 50 FPS...")
             try:
-                # The output path from the main process is a file, but our rife script needs a directory
+                # The output path from the main process is a file, but our interpolation script needs a directory
                 output_video_path = Path(output_path)
-                interpolated_path = run_rife_interpolation(
+                interpolated_path = run_video_interpolation(
                     input_video_path=str(output_video_path),
                     output_dir_path=str(output_video_path.parent)
                 )
                 print(f"Interpolation successful. Final video at: {interpolated_path}")
                 return interpolated_path
             except Exception as e:
-                print(f"Error during RIFE interpolation: {e}")
+                print(f"Error during video frame interpolation: {e}")
                 # Raise a Gradio error but specify that the original video is still available.
                 raise gr.Error(f"Video interpolation failed: {e}. The original 25 FPS video was saved at {output_path}")
 
@@ -349,10 +349,10 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
                 enable_upscale = gr.Checkbox(value=True, label="Enable Upscale")
                 sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=7.5, step=0.5, label="Sharpness Factor")
             
-            enable_interpolation = gr.Checkbox(value=True, label="Enable 50 FPS Interpolation (RIFE)")
+            enable_interpolation = gr.Checkbox(value=True, label="Enable 50 FPS Video Frame Interpolation")
             gr.Markdown(
                 """
-                - **Enable 50 FPS Interpolation:** Doubles the frame rate of the output video from 25 to 50 FPS using RIFE. This can make motion appear smoother but will increase processing time.
+                - **Enable 50 FPS Interpolation:** Doubles the frame rate of the output video from 25 to 50 FPS using video frame interpolation. This can make motion appear smoother but will increase processing time.
                 """
             )
 
