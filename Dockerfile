@@ -15,27 +15,25 @@ RUN apt-get update && \
 # Copy the dependencies file to the working directory
 COPY requirements.txt .
 
-# Clone the repository into the /app directory and initialize submodules
-# Clone into a subdirectory to avoid collision
-RUN git clone --recursive https://github.com/DK0071942/LatentSync.git /app/LatentSync
-
 # Copy the rest of the application code into the container
-# Since we cloned the repo in the step above, this is not strictly necessary,
-# but can be useful if you have local changes you want to include.
 COPY . .
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Initialize git submodules
+RUN git submodule init && git submodule update
+
+# Install dependencies, including huggingface_hub for model downloads
+RUN pip install --no-cache-dir -r requirements.txt && pip install huggingface_hub
 
 # Create checkpoints directory, download models, and verify
-# This step is now AFTER copying the application code.
-# Includes verbose logging and verification.
 RUN echo "Creating checkpoints directory..." && \
     mkdir -p /app/checkpoints && \
-    echo "Downloading ByteDance/LatentSync-1.5: whisper/tiny.pt to /app/checkpoints/whisper/tiny.pt..." && \
+    echo "Downloading checkpoints..." && \
     huggingface-cli download ByteDance/LatentSync-1.5 whisper/tiny.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
-    echo "Downloading ByteDance/LatentSync-1.5: latentsync_unet.pt to /app/checkpoints/default_unet_v1.5.pt..." && \
+    huggingface-cli download ByteDance/LatentSync-1.6 stable_syncnet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
     huggingface-cli download ByteDance/LatentSync-1.5 latentsync_unet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
+    mv /app/checkpoints/latentsync_unet.pt /app/checkpoints/default_unet_v1.5.pt && \
+    huggingface-cli download ByteDance/LatentSync-1.6 latentsync_unet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
+    mv /app/checkpoints/latentsync_unet.pt /app/checkpoints/default_unet_v1.6.pt && \
     echo "" && \
     echo "--- Contents of /app/checkpoints after download: ---" && \
     ls -lR /app/checkpoints && \
@@ -43,17 +41,17 @@ RUN echo "Creating checkpoints directory..." && \
     echo "" && \
     echo "Verifying downloaded checkpoint files..." && \
     FILE1_PATH="/app/checkpoints/whisper/tiny.pt" && \
-    FILE2_PATH="/app/checkpoints/default_unet_v1.5.pt" && \
-    if [ -f "$FILE1_PATH" ]; then \
-        echo "SUCCESS: Checkpoint file $FILE1_PATH found."; \
+    FILE2_PATH="/app/checkpoints/stable_syncnet.pt" && \
+    FILE3_PATH="/app/checkpoints/default_unet_v1.5.pt" && \
+    FILE4_PATH="/app/checkpoints/default_unet_v1.6.pt" && \
+    if [ -f "$FILE1_PATH" ] && [ -f "$FILE2_PATH" ] && [ -f "$FILE3_PATH" ] && [ -f "$FILE4_PATH" ]; then \
+        echo "SUCCESS: All checkpoint files found."; \
     else \
-        echo "ERROR: Checkpoint file $FILE1_PATH NOT found! Download may have failed or the path/filename within the repo is incorrect."; \
-        exit 1; \
-    fi && \
-    if [ -f "$FILE2_PATH" ]; then \
-        echo "SUCCESS: Checkpoint file $FILE2_PATH found."; \
-    else \
-        echo "ERROR: Checkpoint file $FILE2_PATH NOT found! Download may have failed or the path/filename within the repo is incorrect."; \
+        echo "ERROR: One or more checkpoint files are missing!"; \
+        [ -f "$FILE1_PATH" ] || echo "Missing: $FILE1_PATH"; \
+        [ -f "$FILE2_PATH" ] || echo "Missing: $FILE2_PATH"; \
+        [ -f "$FILE3_PATH" ] || echo "Missing: $FILE3_PATH"; \
+        [ -f "$FILE4_PATH" ] || echo "Missing: $FILE4_PATH"; \
         exit 1; \
     fi && \
     echo "All specified checkpoint files verified successfully."
