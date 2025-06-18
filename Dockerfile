@@ -14,14 +14,18 @@ RUN git clone --recursive https://${GITHUB_TOKEN}@github.com/DK0071942/LatentSyn
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt && pip install huggingface_hub
 
-# Download checkpoints and verify
+# Download checkpoints only if they don't already exist
 RUN mkdir -p /app/checkpoints && \
-    huggingface-cli download ByteDance/LatentSync-1.5 whisper/tiny.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
-    huggingface-cli download ByteDance/LatentSync-1.6 stable_syncnet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
-    huggingface-cli download ByteDance/LatentSync-1.5 latentsync_unet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
-    mv /app/checkpoints/latentsync_unet.pt /app/checkpoints/default_unet_v1.5.pt && \
-    huggingface-cli download ByteDance/LatentSync-1.6 latentsync_unet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
-    mv /app/checkpoints/latentsync_unet.pt /app/checkpoints/default_unet_v1.6.pt && \
+    ([ -f "/app/checkpoints/whisper/tiny.pt" ] || \
+        huggingface-cli download ByteDance/LatentSync-1.5 whisper/tiny.pt --local-dir /app/checkpoints --local-dir-use-symlinks False) && \
+    ([ -f "/app/checkpoints/stable_syncnet.pt" ] || \
+        huggingface-cli download ByteDance/LatentSync-1.6 stable_syncnet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False) && \
+    ([ -f "/app/checkpoints/default_unet_v1.5.pt" ] || ( \
+        huggingface-cli download ByteDance/LatentSync-1.5 latentsync_unet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
+        mv /app/checkpoints/latentsync_unet.pt /app/checkpoints/default_unet_v1.5.pt)) && \
+    ([ -f "/app/checkpoints/default_unet_v1.6.pt" ] || ( \
+        huggingface-cli download ByteDance/LatentSync-1.6 latentsync_unet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
+        mv /app/checkpoints/latentsync_unet.pt /app/checkpoints/default_unet_v1.6.pt)) && \
     echo "Checkpoint verification..." && \
     [ -f "/app/checkpoints/whisper/tiny.pt" ] && \
     [ -f "/app/checkpoints/stable_syncnet.pt" ] && \
