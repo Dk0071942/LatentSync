@@ -349,7 +349,7 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
                 enable_upscale = gr.Checkbox(value=True, label="Enable Upscale")
                 sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=7.5, step=0.5, label="Sharpness Factor")
             
-            enable_interpolation = gr.Checkbox(value=False, label="Enable 50 FPS Interpolation (RIFE)")
+            enable_interpolation = gr.Checkbox(value=True, label="Enable 50 FPS Interpolation (RIFE)")
             gr.Markdown(
                 """
                 - **Enable 50 FPS Interpolation:** Doubles the frame rate of the output video from 25 to 50 FPS using RIFE. This can make motion appear smoother but will increase processing time.
