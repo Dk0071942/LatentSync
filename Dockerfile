@@ -8,11 +8,11 @@ RUN apt-get update && apt-get install -y git ffmpeg libgl1 build-essential pytho
 # Set working directory
 WORKDIR /app
 
-# Clone the public main repo
-RUN git clone https://github.com/DK0071942/LatentSync.git /app
+# Copy the application code from the build context
+COPY . .
 
-# Use token to pull private submodules
-WORKDIR /app
+# Initialize submodules
+# The GITHUB_TOKEN is used here for any private submodules
 RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/" && \
     git submodule update --init --recursive
 
