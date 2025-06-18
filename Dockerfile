@@ -11,11 +11,6 @@ WORKDIR /app
 # Copy the application code from the build context
 COPY . .
 
-# Initialize submodules
-# The GITHUB_TOKEN is used here for any private submodules
-RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/" && \
-    git submodule update --init --recursive
-
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt && pip install huggingface_hub
 
