@@ -16,7 +16,8 @@ RUN apt-get update && \
 COPY requirements.txt .
 
 # Clone the repository into the /app directory and initialize submodules
-RUN git clone --recursive https://github.com/DK0071942/LatentSync.git .
+# Clone into a subdirectory to avoid collision
+RUN git clone --recursive https://github.com/DK0071942/LatentSync.git /app/LatentSync
 
 # Copy the rest of the application code into the container
 # Since we cloned the repo in the step above, this is not strictly necessary,
