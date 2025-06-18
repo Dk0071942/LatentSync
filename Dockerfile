@@ -8,8 +8,13 @@ RUN apt-get update && apt-get install -y git ffmpeg libgl1 build-essential pytho
 # Set working directory
 WORKDIR /app
 
-# Clone your repo with the private submodule using your PAT
-RUN git clone --recursive https://${GITHUB_TOKEN}@github.com/DK0071942/LatentSync.git /app
+# Clone the public main repo
+RUN git clone https://github.com/DK0071942/LatentSync.git /app
+
+# Use token to pull private submodules
+WORKDIR /app
+RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/" && \
+    git submodule update --init --recursive
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt && pip install huggingface_hub
