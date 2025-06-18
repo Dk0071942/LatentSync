@@ -47,7 +47,7 @@ class Predictor(BasePredictor):
         video_path = str(video)
         audio_path = str(audio)
         config_path = "configs/unet/stage2.yaml"
-        ckpt_path = "checkpoints/latentsync_unet.pt"
+        ckpt_path = "checkpoints/default_unet_v1.5.pt"
         output_path = "/tmp/video_out.mp4"
 
         # Run the following command:

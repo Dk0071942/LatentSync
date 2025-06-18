@@ -1,10 +1,10 @@
 data:
   syncnet_config_path: configs/syncnet/syncnet_16_pixel_attn.yaml
   train_output_dir: debug/unet
-  train_fileslist: /home/ubuntu/LatentSync/file_list/train_files.txt
+  train_fileslist: file_list/train_files.txt
   train_data_dir: ""
-  audio_embeds_cache_dir: /home/ubuntu/LatentSync/audio_cache/embeds
-  audio_mel_cache_dir: /home/ubuntu/LatentSync/audio_cache/mel
+  audio_embeds_cache_dir: audio_cache/embeds
+  audio_mel_cache_dir: audio_cache/mel
 
   val_video_path: validation_set/FK1_val_video.mp4
   val_audio_path: validation_set/FK1_val_audio.wav
@@ -18,7 +18,7 @@ data:
   audio_feat_length: [2, 2]
 
 ckpt:
-  resume_ckpt_path: checkpoints/1.5/default_unet.pt
+  resume_ckpt_path: checkpoints/default_unet_v1.5.pt
   save_ckpt_steps: 25000
 
 run:

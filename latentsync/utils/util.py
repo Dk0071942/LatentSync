@@ -19,6 +19,7 @@ from typing import Union
 from pathlib import Path
 import matplotlib.pyplot as plt
 import imageio
+import logging
 
 import torch
 import torch.nn as nn
@@ -32,6 +33,10 @@ from decord import AudioReader, VideoReader
 import shutil
 import subprocess
 
+from .av_reader import AudioReader
+
+
+logger = logging.getLogger(__name__)
 
 # Machine epsilon for a float32 (single precision)
 eps = np.finfo(np.float32).eps
@@ -135,6 +140,10 @@ def write_video_cv2(video_output_path: str, video_frames: np.ndarray, fps: int):
 
 def init_dist(backend="nccl", **kwargs):
     """Initializes distributed environment."""
+    if "RANK" not in os.environ:
+        print("INFO: Not in a distributed environment. Running in single-process mode.")
+        return -1
+
     rank = int(os.environ["RANK"])
     num_gpus = torch.cuda.device_count()
     if num_gpus == 0:
@@ -285,3 +294,41 @@ class dummy_context:
 
     def __exit__(self, *args):
         pass
+
+
+def validation(config, pipeline, device, epoch, step, output_dir, syncnet_eval_model, syncnet_detector):
+    logger.info("Running validation... ")
+    #
+    val_video_path = config.data.val_video_path
+    val_audio_path = config.data.val_audio_path
+    width = config.data.resolution
+    height = config.data.resolution
+    num_frames = config.data.num_frames
+    num_inference_steps = config.run.inference_steps
+    guidance_scale = config.run.guidance_scale
+    
+    val_video_out_path = f"{output_dir}/val_videos/val_video_e{epoch}_s{step}.mp4"
+
+    pipeline(
+        val_video_path,
+        val_audio_path,
+        val_video_out_path,
+        num_frames=num_frames,
+        width=width,
+        height=height,
+        num_inference_steps=num_inference_steps,
+        guidance_scale=guidance_scale,
+        weight_dtype=torch.float16,
+    )
+    logger.info(f"Saved validation video to {val_video_out_path}")
+
+    # syncnet eval
+    try:
+        _, conf = syncnet_eval(syncnet_eval_model, syncnet_detector, val_video_out_path, "temp")
+    except Exception as e:
+        logger.info(e)
+        conf = 0
+
+    # validation loss
+    val_loss = 1 - conf
+    return conf, val_loss

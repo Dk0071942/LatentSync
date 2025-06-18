@@ -4,8 +4,27 @@ from scripts.inference import main
 from omegaconf import OmegaConf
 import argparse
 from datetime import datetime
-import os # Added for listing files
+import os
 import base64
+import sys
+
+# --- RIFE Integration ---
+# Add RIFE submodule to sys.path so we can import the interpolation function
+script_dir = Path(__file__).parent.resolve()
+rife_dir = script_dir / "ECCV2022-RIFE"
+if rife_dir.exists() and str(rife_dir) not in sys.path:
+    sys.path.append(str(rife_dir))
+
+# Import the main function from our new script
+try:
+    from run_interpolation import main_interpolate as run_rife_interpolation
+except ImportError as e:
+    print(f"Could not import RIFE interpolation script: {e}")
+    # Define a dummy function to prevent the app from crashing if RIFE is not set up
+    def run_rife_interpolation(*args, **kwargs):
+        raise RuntimeError("RIFE submodule not found or not set up correctly. Please check the 'ECCV2022-RIFE' directory.")
+
+# --- End RIFE Integration ---
 
 # Get the directory of the current script to build absolute paths
 script_dir = Path(__file__).parent.resolve()
@@ -58,6 +77,7 @@ def process_video(
     sharpness_factor,
     selected_checkpoint, # Added new argument, will be relative path string or "No checkpoints available"
     resolution,
+    enable_interpolation,
 ):
     if selected_checkpoint == "No checkpoints available": # Check for placeholder string
         raise gr.Error("No checkpoint selected. Please ensure checkpoint files are available and one is selected.")
@@ -124,6 +144,23 @@ def process_video(
             args=args,
         )
         print("Processing completed successfully.")
+        
+        if enable_interpolation:
+            print("Interpolating video to 50 FPS...")
+            try:
+                # The output path from the main process is a file, but our rife script needs a directory
+                output_video_path = Path(output_path)
+                interpolated_path = run_rife_interpolation(
+                    input_video_path=str(output_video_path),
+                    output_dir_path=str(output_video_path.parent)
+                )
+                print(f"Interpolation successful. Final video at: {interpolated_path}")
+                return interpolated_path
+            except Exception as e:
+                print(f"Error during RIFE interpolation: {e}")
+                # Raise a Gradio error but specify that the original video is still available.
+                raise gr.Error(f"Video interpolation failed: {e}. The original 25 FPS video was saved at {output_path}")
+
         return output_path # Ensure the output path is returned
     except Exception as e:
         print(f"Error during processing: {str(e)}")
@@ -271,7 +308,7 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
         dropdown_default_value = dropdown_choices[0]
     else:
         dropdown_choices = checkpoint_files_list
-        preferred_default = "checkpoints/1.5/default_unet.pt"
+        preferred_default = "checkpoints/default_unet_v1.5.pt"
         if preferred_default in dropdown_choices:
             dropdown_default_value = preferred_default
         else:
@@ -311,12 +348,14 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
             with gr.Row():
                 enable_upscale = gr.Checkbox(value=True, label="Enable Upscale")
                 sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=7.5, step=0.5, label="Sharpness Factor")
+            
+            enable_interpolation = gr.Checkbox(value=False, label="Enable 50 FPS Interpolation (RIFE)")
             gr.Markdown(
                 """
-                - **Enable Upscale:** Upscales the output video resolution.
-                - **Sharpness Factor:** Adjusts sharpness of the upscaled video.
+                - **Enable 50 FPS Interpolation:** Doubles the frame rate of the output video from 25 to 50 FPS using RIFE. This can make motion appear smoother but will increase processing time.
                 """
             )
+
             seed = gr.Number(value=1247, label="Random Seed", precision=0)
             gr.Markdown(
                 """
@@ -346,6 +385,7 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
             sharpness_factor,
             checkpoint_dropdown,
             resolution_input,
+            enable_interpolation,
         ],
         outputs=video_output,
     )

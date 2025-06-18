@@ -67,7 +67,7 @@ if __name__ == "__main__":
     output_dir = "/mnt/bn/maliva-gen-ai-v2/chunyu.li/inference_videos_results"
 
     unet_config_path = "configs/unet/stage2_512.yaml"
-    ckpt_path = "checkpoints/latentsync_unet.pt"
+    ckpt_path = "checkpoints/default_unet_v1.5.pt"
     guidance_scale = 1.5
 
     seed = 42

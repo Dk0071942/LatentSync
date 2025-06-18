@@ -18,7 +18,7 @@ data:
   audio_feat_length: [2, 2]
 
 ckpt:
-  resume_ckpt_path: checkpoints/1.6/default_unet.pt
+  resume_ckpt_path: checkpoints/default_unet_1.6.pt
   save_ckpt_steps: 10000
 
 run:

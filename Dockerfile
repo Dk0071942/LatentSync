@@ -15,14 +15,16 @@ RUN apt-get update && \
 # Copy the dependencies file to the working directory
 COPY requirements.txt .
 
-# Install Python dependencies (huggingface-hub is in requirements.txt, so it will be available)
-# Using --no-cache-dir to potentially reduce image size slightly, though --cache-dir during multi-stage builds can be useful.
-# Sticking with user's --cache-dir as it might be intentional for their build environment.
-RUN pip3 install --cache-dir=/root/.cache/pip -r requirements.txt
+# Clone the repository into the /app directory and initialize submodules
+RUN git clone --recursive https://github.com/DK0071942/LatentSync.git .
 
-# Copy the rest of the application's source code from the current directory to the working directory in the container
-# This is moved BEFORE the checkpoint download to prevent overwriting the checkpoints.
+# Copy the rest of the application code into the container
+# Since we cloned the repo in the step above, this is not strictly necessary,
+# but can be useful if you have local changes you want to include.
 COPY . .
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Create checkpoints directory, download models, and verify
 # This step is now AFTER copying the application code.
@@ -31,7 +33,7 @@ RUN echo "Creating checkpoints directory..." && \
     mkdir -p /app/checkpoints && \
     echo "Downloading ByteDance/LatentSync-1.5: whisper/tiny.pt to /app/checkpoints/whisper/tiny.pt..." && \
     huggingface-cli download ByteDance/LatentSync-1.5 whisper/tiny.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
-    echo "Downloading ByteDance/LatentSync-1.5: latentsync_unet.pt to /app/checkpoints/latentsync_unet.pt..." && \
+    echo "Downloading ByteDance/LatentSync-1.5: latentsync_unet.pt to /app/checkpoints/default_unet_v1.5.pt..." && \
     huggingface-cli download ByteDance/LatentSync-1.5 latentsync_unet.pt --local-dir /app/checkpoints --local-dir-use-symlinks False && \
     echo "" && \
     echo "--- Contents of /app/checkpoints after download: ---" && \
@@ -40,7 +42,7 @@ RUN echo "Creating checkpoints directory..." && \
     echo "" && \
     echo "Verifying downloaded checkpoint files..." && \
     FILE1_PATH="/app/checkpoints/whisper/tiny.pt" && \
-    FILE2_PATH="/app/checkpoints/latentsync_unet.pt" && \
+    FILE2_PATH="/app/checkpoints/default_unet_v1.5.pt" && \
     if [ -f "$FILE1_PATH" ]; then \
         echo "SUCCESS: Checkpoint file $FILE1_PATH found."; \
     else \

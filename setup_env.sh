@@ -14,10 +14,11 @@ pip install -r requirements.txt
 sudo apt -y install libgl1
 
 # Download the checkpoints required for inference from HuggingFace
-huggingface-cli download ByteDance/LatentSync-1.5 whisper/tiny.pt --local-dir checkpoints/1.5
-huggingface-cli download ByteDance/LatentSync-1.5 latentsync_unet.pt --local-dir checkpoints/1.5
-huggingface-cli download ByteDance/LatentSync-1.6 whisper/tiny.pt --local-dir checkpoints/1.6
-huggingface-cli download ByteDance/LatentSync-1.6 latentsync_unet.pt --local-dir checkpoints/1.6
+huggingface-cli download ByteDance/LatentSync-1.5 whisper/tiny.pt --local-dir checkpoints
+huggingface-cli download ByteDance/LatentSync-1.5 latentsync_unet.pt --local-dir checkpoints
+mv checkpoints/latentsync_unet.pt checkpoints/default_unet_v1.5.pt
+huggingface-cli download ByteDance/LatentSync-1.6 latentsync_unet.pt --local-dir checkpoints
+mv checkpoints/latentsync_unet.pt checkpoints/default_unet_v1.6.pt
 
-mv checkpoints/1.5/latentsync_unet.pt checkpoints/1.5/default_unet.pt
-mv checkpoints/1.6/latentsync_unet.pt checkpoints/1.6/default_unet.pt
+git submodule init
+git submodule update

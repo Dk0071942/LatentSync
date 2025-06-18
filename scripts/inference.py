@@ -14,6 +14,7 @@
 
 import argparse
 import os
+from pathlib import Path
 from omegaconf import OmegaConf
 import torch
 from diffusers import AutoencoderKL, DDIMScheduler
@@ -25,17 +26,20 @@ from DeepCache import DeepCacheSDHelper
 
 
 def main(config, args):
-    if not os.path.exists(args.video_path):
+    video_path = Path(args.video_path)
+    audio_path = Path(args.audio_path)
+
+    if not video_path.exists():
         raise RuntimeError(f"Video path '{args.video_path}' not found")
-    if not os.path.exists(args.audio_path):
+    if not audio_path.exists():
         raise RuntimeError(f"Audio path '{args.audio_path}' not found")
 
     # Check if the GPU supports float16
     is_fp16_supported = torch.cuda.is_available() and torch.cuda.get_device_capability()[0] > 7
     dtype = torch.float16 if is_fp16_supported else torch.float32
 
-    print(f"Input video path: {args.video_path}")
-    print(f"Input audio path: {args.audio_path}")
+    print(f"Input video path: {video_path}")
+    print(f"Input audio path: {audio_path}")
     print(f"Loaded checkpoint path: {args.inference_ckpt_path}")
 
     scheduler = DDIMScheduler.from_pretrained("configs")

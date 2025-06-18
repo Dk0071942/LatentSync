@@ -15,11 +15,11 @@ torchrun --nnodes=1 --nproc_per_node=1 --master_port=25678 -m scripts.train_sync
 ## Train UNet
 
 ```cmd
-torchrun --nnodes=1 --nproc_per_node=1 --master_port=25679 -m scripts.train_unet --unet_config_path "configs/unet/stage1.yaml"
+python -m torch.distributed.run --nnodes=1 --nproc_per_node=1 --master_port=25679 -m scripts.train_unet --unet_config_path "configs/unet/stage2.yaml"
 ```
 
 ## Inference
 
 ```cmd
-python -m scripts.inference --unet_config_path "configs/unet/stage2.yaml" --inference_ckpt_path "checkpoints/latentsync_unet.pt" --inference_steps 20 --guidance_scale 2.0 --video_path "assets/demo1_video.mp4" --audio_path "assets/demo1_audio.wav" --video_out_path "video_out.mp4"
+python -m scripts.inference --unet_config_path "configs/unet/stage2.yaml" --inference_ckpt_path "checkpoints/default_unet_v1.5.pt" --inference_steps 20 --guidance_scale 2.0 --video_path "assets/demo1_video.mp4" --audio_path "assets/demo1_audio.wav" --video_out_path "video_out.mp4"
 ```
