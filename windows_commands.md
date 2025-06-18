@@ -15,7 +15,7 @@ torchrun --nnodes=1 --nproc_per_node=1 --master_port=25678 -m scripts.train_sync
 ## Train UNet
 
 ```cmd
-python -m torch.distributed.run --nnodes=1 --nproc_per_node=1 --master_port=25679 -m scripts.train_unet --unet_config_path "configs/unet/stage2.yaml"
+$env:PYTHONPATH="X:\Github_repo\LatentSync"; python scripts/train_unet.py --unet_config_path "configs/unet/stage2_efficient.yaml"
 ```
 
 ## Inference
