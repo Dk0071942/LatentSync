@@ -676,19 +676,15 @@ class LipsyncPipeline(DiffusionPipeline):
         # Pass potentially None concatenated_frames if no valid frames were processed across all chunks
         synced_video_frames = self.restore_video(concatenated_frames, video_frames, boxes, affine_matrices, face_detected_flags)
 
-        audio_samples_remain_length = int(synced_video_frames.shape[0] / video_fps * audio_sample_rate)
-        audio_samples = audio_samples[:audio_samples_remain_length].cpu().numpy()
-
         if is_train:
             self.unet.train()
 
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
+        
+        temp_video_path = os.path.join(temp_dir, "video.mp4")
+        write_video(temp_video_path, synced_video_frames, fps=video_fps)
 
-        write_video(os.path.join(temp_dir, "video.mp4"), synced_video_frames, fps=video_fps)
-
-        sf.write(os.path.join(temp_dir, "audio.wav"), audio_samples, audio_sample_rate)
-
-        command = f"ffmpeg -y -loglevel error -nostdin -i \"{os.path.join(temp_dir, 'video.mp4')}\" -i \"{os.path.join(temp_dir, 'audio.wav')}\" -c:v libx264 -crf 18 -c:a aac -q:v 0 -q:a 0 \"{video_out_path}\""
+        command = f"ffmpeg -y -loglevel error -nostdin -i \"{temp_video_path}\" -i \"{audio_path}\" -c:v libx264 -preset veryfast -crf 18 -c:a copy -pix_fmt yuv420p -shortest \"{video_out_path}\""
         subprocess.run(command, shell=True)
