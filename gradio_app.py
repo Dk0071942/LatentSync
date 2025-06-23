@@ -420,7 +420,12 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
                     with gr.Row():
                         enable_upscale = gr.Checkbox(value=True, label="Enable Upscale")
                         sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=7.5, step=0.5, label="Sharpness Factor")
-                    
+                    gr.Markdown(
+                        """
+                        - **Upscale:** Upscale will make the mouth region sharper and more detailed, however it will slow down the processing time.
+                        """
+                    )
+
                     enable_interpolation = gr.Checkbox(value=True, label="Enable 50 FPS Video Frame Interpolation")
                     gr.Markdown(
                         """

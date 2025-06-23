@@ -14,6 +14,7 @@ import torchvision
 from torchvision import transforms
 
 from packaging import version
+import time
 
 from diffusers.configuration_utils import FrozenDict
 from diffusers.models import AutoencoderKL
@@ -466,12 +467,14 @@ class LipsyncPipeline(DiffusionPipeline):
         callback_steps: Optional[int] = 1,
         **kwargs,
     ):
+        call_start_time = time.time()
         is_train = self.unet.training
         self.unet.eval()
 
         check_ffmpeg_installed()
 
         # 0. Define call parameters
+        setup_start_time = time.time()
         device = self._execution_device
         mask_image = load_fixed_mask(height, mask_image_path)
         self.image_processor = ImageProcessor(height, device="cuda", mask_image=mask_image)
@@ -495,19 +498,29 @@ class LipsyncPipeline(DiffusionPipeline):
 
         # 4. Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+        setup_end_time = time.time()
+        print(f"Pipeline setup time: {setup_end_time - setup_start_time:.2f} seconds")
 
+        data_prepare_start_time = time.time()
         whisper_feature = self.audio_encoder.audio2feat(audio_path)
         whisper_chunks = self.audio_encoder.feature2chunks(feature_array=whisper_feature, fps=video_fps)
 
         audio_samples = read_audio(audio_path)
         video_frames = read_video(video_path, use_decord=False)
+        data_prepare_end_time = time.time()
+        print(f"Audio/Video loading and feature extraction time: {data_prepare_end_time - data_prepare_start_time:.2f} seconds")
 
+        loop_video_start_time = time.time()
         video_frames, faces, boxes, affine_matrices, face_detected_flags = self.loop_video(whisper_chunks, video_frames)
+        loop_video_end_time = time.time()
+        print(f"Video looping and face detection/affine transform time: {loop_video_end_time - loop_video_start_time:.2f} seconds")
+
 
         synced_video_frames = []
 
         num_channels_latents = self.vae.config.latent_channels
 
+        prepare_latents_start_time = time.time()
         # Prepare latent variables
         all_latents = self.prepare_latents(
             len(whisper_chunks),
@@ -518,7 +531,10 @@ class LipsyncPipeline(DiffusionPipeline):
             device,
             generator,
         )
+        prepare_latents_end_time = time.time()
+        print(f"Initial latents preparation time: {prepare_latents_end_time - prepare_latents_start_time:.2f} seconds")
 
+        inference_loop_start_time = time.time()
         num_inferences = math.ceil(len(whisper_chunks) / num_frames)
         for i in tqdm.tqdm(range(num_inferences), desc="Doing inference..."):
             if self.unet.add_audio_layer:
@@ -659,6 +675,9 @@ class LipsyncPipeline(DiffusionPipeline):
             )
             # Append the result for this chunk (contains only processed frames)
             synced_video_frames.append(decoded_latents)
+        
+        inference_loop_end_time = time.time()
+        print(f"Main inference loop total time: {inference_loop_end_time - inference_loop_start_time:.2f} seconds")
 
         # Filter out None placeholders before concatenating for restore_video
         valid_synced_frames = [f for f in synced_video_frames if f is not None]
@@ -673,12 +692,17 @@ class LipsyncPipeline(DiffusionPipeline):
             # Concatenate results from chunks that had valid faces
             concatenated_frames = torch.cat(valid_synced_frames)
 
+        restore_video_start_time = time.time()
         # Pass potentially None concatenated_frames if no valid frames were processed across all chunks
         synced_video_frames = self.restore_video(concatenated_frames, video_frames, boxes, affine_matrices, face_detected_flags)
+        restore_video_end_time = time.time()
+        print(f"Video restoration time: {restore_video_end_time - restore_video_start_time:.2f} seconds")
+
 
         if is_train:
             self.unet.train()
 
+        ffmpeg_start_time = time.time()
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
@@ -688,3 +712,8 @@ class LipsyncPipeline(DiffusionPipeline):
 
         command = f"ffmpeg -y -loglevel error -nostdin -i \"{temp_video_path}\" -i \"{audio_path}\" -c:v libx264 -preset veryfast -crf 18 -c:a copy -pix_fmt yuv420p -shortest \"{video_out_path}\""
         subprocess.run(command, shell=True)
+        ffmpeg_end_time = time.time()
+        print(f"Final video writing and ffmpeg merging time: {ffmpeg_end_time - ffmpeg_start_time:.2f} seconds")
+
+        call_end_time = time.time()
+        print(f"Total __call__ time: {call_end_time - call_start_time:.2f} seconds")
