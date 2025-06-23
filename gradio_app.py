@@ -1,4 +1,5 @@
 import gradio as gr
+import time
 from pathlib import Path
 from scripts.inference import main
 from omegaconf import OmegaConf
@@ -81,15 +82,16 @@ def get_result_sessions():
 def get_session_video(session_name):
     """Given a session name, finds the final video."""
     if not session_name:
-        return gr.update(value=None, visible=False)
+        return gr.update(value=None, visible=False), gr.update(visible=False)
 
     session_dir = script_dir / "results" / session_name
     final_video_path = session_dir / "final_video.mp4"
     
     video_path_str = str(final_video_path) if final_video_path.exists() else None
+    is_visible = video_path_str is not None
 
     # Return update to show the video player and load the video if it exists
-    return gr.update(value=video_path_str, visible=video_path_str is not None)
+    return gr.update(value=video_path_str, visible=is_visible), gr.update(visible=is_visible)
 
 
 def create_thumbnail(video_path, thumbnail_path):
@@ -109,6 +111,53 @@ def create_thumbnail(video_path, thumbnail_path):
     except Exception as e:
         print(f"Error creating thumbnail for {video_path}: {e}")
         return False
+
+
+def interpolate_from_browser(session_name):
+    if not session_name:
+        raise gr.Error("No session selected to interpolate.")
+
+    # 1. Setup paths
+    results_dir = script_dir / "results"
+    original_session_dir = results_dir / session_name
+    original_video_path = original_session_dir / "final_video.mp4"
+
+    if not original_video_path.exists():
+        raise gr.Error(f"Video not found in session: {session_name}")
+
+    # Create a new session for the interpolated video
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    new_session_name = f"{Path(session_name).stem}_interpolated_{current_time}"
+    new_session_dir = results_dir / new_session_name
+    new_session_dir.mkdir(exist_ok=True)
+    
+    # 2. Run interpolation
+    print(f"Interpolating video from session '{session_name}' to 50 FPS...")
+    try:
+        interpolated_path_str = run_video_interpolation(
+            input_video_path=str(original_video_path),
+            output_dir_path=str(new_session_dir),
+        )
+
+        final_video_path_in_new_session = new_session_dir / "final_video.mp4"
+        Path(interpolated_path_str).rename(final_video_path_in_new_session)
+
+    except Exception as e:
+        print(f"Error during video frame interpolation from browser: {e}")
+        shutil.rmtree(new_session_dir, ignore_errors=True)
+        raise gr.Error(f"Video interpolation failed: {e}. No video was saved.")
+
+    # 3. Create thumbnail for the new video
+    thumbnail_path = new_session_dir / "thumbnail.jpg"
+    create_thumbnail(str(final_video_path_in_new_session), thumbnail_path)
+    
+    print(f"Interpolation successful. New video saved in session: {new_session_name}")
+
+    # 4. Return updates for the gallery and video player
+    return {
+        gallery: gr.update(value=get_gallery_data()),
+        video_output_browser: gr.update(value=str(final_video_path_in_new_session), visible=True),
+    }
 
 
 def process_video(
@@ -201,6 +250,7 @@ def process_video(
 
         if enable_interpolation:
             print("Interpolating video to 50 FPS...")
+            interpolate_start_time = time.time()
             try:
                 # The interpolation script saves its output in the specified directory.
                 interpolated_path_str = run_video_interpolation(
@@ -213,6 +263,7 @@ def process_video(
                 
                 # Clean up the pre-interpolated video from the temp folder
                 temp_video_path.unlink(missing_ok=True)
+                print(f"Video interpolation completed in {time.time() - interpolate_start_time:.2f} seconds")
 
             except Exception as e:
                 print(f"Error during video frame interpolation: {e}")
@@ -222,6 +273,7 @@ def process_video(
         else:
             # If no interpolation, move the generated video from temp to its session folder
             shutil.move(str(temp_video_path), str(final_video_path_in_session))
+        
 
         # --- 4. Create thumbnail and return final path ---
         thumbnail_path = session_dir / "thumbnail.jpg"
@@ -492,6 +544,9 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
             with gr.Row():
                 video_output_browser = gr.Video(label="Result Video", visible=False)
 
+            with gr.Row():
+                interpolate_button = gr.Button("Interpolate Selected Video to 50 FPS", visible=False)
+
             def get_gallery_data():
                 """Scans the results directory and prepares data for the gallery."""
                 results_dir = script_dir / "results"
@@ -546,7 +601,13 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
             selected_session_name.change(
                 fn=get_session_video,
                 inputs=[selected_session_name],
-                outputs=[video_output_browser]
+                outputs=[video_output_browser, interpolate_button]
+            )
+
+            interpolate_button.click(
+                fn=interpolate_from_browser,
+                inputs=[selected_session_name],
+                outputs=[gallery, video_output_browser],
             )
 
 if __name__ == "__main__":
