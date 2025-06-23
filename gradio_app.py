@@ -7,6 +7,8 @@ from datetime import datetime
 import os
 import base64
 import sys
+import cv2
+import shutil
 
 # --- RIFE Integration ---
 # Add RIFE submodule to sys.path so we can import the interpolation function
@@ -67,6 +69,48 @@ def get_checkpoint_files():
     return sorted_paths
 
 
+def get_result_sessions():
+    """Scans for and returns a list of past result session directories."""
+    results_dir = script_dir / "results"
+    if not results_dir.exists():
+        return []
+    # Return sorted list of session directories, newest first
+    return sorted([d.name for d in results_dir.iterdir() if d.is_dir()], reverse=True)
+
+
+def get_session_video(session_name):
+    """Given a session name, finds the final video."""
+    if not session_name:
+        return gr.update(value=None, visible=False)
+
+    session_dir = script_dir / "results" / session_name
+    final_video_path = session_dir / "final_video.mp4"
+    
+    video_path_str = str(final_video_path) if final_video_path.exists() else None
+
+    # Return update to show the video player and load the video if it exists
+    return gr.update(value=video_path_str, visible=video_path_str is not None)
+
+
+def create_thumbnail(video_path, thumbnail_path):
+    """Creates a thumbnail from the first frame of a video."""
+    if Path(thumbnail_path).exists():
+        return True
+    try:
+        vidcap = cv2.VideoCapture(str(video_path))
+        success, image = vidcap.read()
+        if success:
+            cv2.imwrite(str(thumbnail_path), image)
+            vidcap.release()
+            return True
+        vidcap.release()
+        print(f"Failed to read frame from {video_path} for thumbnail.")
+        return False
+    except Exception as e:
+        print(f"Error creating thumbnail for {video_path}: {e}")
+        return False
+
+
 def process_video(
     video_path,
     audio_path,
@@ -82,12 +126,22 @@ def process_video(
     if selected_checkpoint == "No checkpoints available": # Check for placeholder string
         raise gr.Error("No checkpoint selected. Please ensure checkpoint files are available and one is selected.")
 
-    # Create the temp directory if it doesn't exist, relative to the script's location
-    output_dir = script_dir / "temp"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # --- 1. Setup paths ---
+    results_dir = script_dir / "results"
+    temp_dir = script_dir / "temp"
+    results_dir.mkdir(exist_ok=True)
+    temp_dir.mkdir(exist_ok=True)
 
-    # Convert paths to absolute Path objects and normalize them
+    # Unique session folder for the final result
     video_file_path = Path(video_path)
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_dir = results_dir / f"{video_file_path.stem}_{current_time}"
+    session_dir.mkdir(exist_ok=True)
+
+    # The pre-interpolated output will be in the temp dir with a unique name
+    temp_video_path = temp_dir / f"{video_file_path.stem}_{current_time}.mp4"
+
+    # Convert source paths to absolute Path objects and normalize them
     video_path = video_file_path.absolute().as_posix()
     audio_path = Path(audio_path).absolute().as_posix()
     
@@ -109,10 +163,6 @@ def process_video(
         raise gr.Error(f"Configuration file for resolution {resolution} not found at {config_path}")
 
 
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # Set the output path for the processed video
-    output_path = str(output_dir / f"{video_file_path.stem}_{current_time}.mp4") # Change the filename as needed
-
     config = OmegaConf.load(config_path)
 
     config["run"].update(
@@ -124,46 +174,65 @@ def process_video(
         }
     )
 
-    # Parse the arguments
+    # --- 2. Parse arguments and run main processing ---
     args = create_args(
         video_path,
         audio_path,
-        output_path,
+        str(temp_video_path), # Output path for the initial run is in temp
         inference_steps,
         guidance_scale,
         seed,
         enable_upscale,
         sharpness_factor,
-        checkpoint_file_obj.as_posix(), # Pass the selected checkpoint path (now an absolute path string)
+        checkpoint_file_obj.as_posix(),
         config_path.as_posix(),
+        str(temp_dir), # Use the general temp directory for intermediate files
     )
 
     try:
-        result = main(
+        main(
             config=config,
             args=args,
         )
         print("Processing completed successfully.")
         
+        # --- 3. Handle final output and interpolation ---
+        final_video_path_in_session = session_dir / "final_video.mp4"
+
         if enable_interpolation:
             print("Interpolating video to 50 FPS...")
             try:
-                # The output path from the main process is a file, but our interpolation script needs a directory
-                output_video_path = Path(output_path)
-                interpolated_path = run_video_interpolation(
-                    input_video_path=str(output_video_path),
-                    output_dir_path=str(output_video_path.parent)
+                # The interpolation script saves its output in the specified directory.
+                interpolated_path_str = run_video_interpolation(
+                    input_video_path=str(temp_video_path),
+                    output_dir_path=str(session_dir)
                 )
-                print(f"Interpolation successful. Final video at: {interpolated_path}")
-                return interpolated_path
+                interpolated_path_obj = Path(interpolated_path_str)
+                # Rename the generated file to our consistent name
+                interpolated_path_obj.rename(final_video_path_in_session)
+                
+                # Clean up the pre-interpolated video from the temp folder
+                temp_video_path.unlink(missing_ok=True)
+
             except Exception as e:
                 print(f"Error during video frame interpolation: {e}")
-                # Raise a Gradio error but specify that the original video is still available.
-                raise gr.Error(f"Video interpolation failed: {e}. The original 25 FPS video was saved at {output_path}")
+                # Clean up temp file on failure
+                temp_video_path.unlink(missing_ok=True)
+                raise gr.Error(f"Video interpolation failed: {e}. No video was saved.")
+        else:
+            # If no interpolation, move the generated video from temp to its session folder
+            shutil.move(str(temp_video_path), str(final_video_path_in_session))
 
-        return output_path # Ensure the output path is returned
+        # --- 4. Create thumbnail and return final path ---
+        thumbnail_path = session_dir / "thumbnail.jpg"
+        create_thumbnail(str(final_video_path_in_session), thumbnail_path)
+
+        return str(final_video_path_in_session)
+
     except Exception as e:
         print(f"Error during processing: {str(e)}")
+        # Clean up temp file on failure
+        temp_video_path.unlink(missing_ok=True)
         raise gr.Error(f"Error during processing: {str(e)}")
 
 
@@ -178,6 +247,7 @@ def create_args(
     sharpness_factor: float,
     checkpoint_path: str, # Added new argument
     unet_config_path: str,
+    temp_dir_path: str,
 ) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--unet_config_path", type=str, default="configs/unet.yaml")
@@ -214,7 +284,7 @@ def create_args(
         "--sharpness_factor",
         str(sharpness_factor),
         "--temp_dir",
-        "temp",
+        temp_dir_path,
         "--enable_deepcache",
     ]
     # Add the flag only if enable_upscale is True
@@ -270,128 +340,209 @@ body {
 
 # Create Gradio interface
 with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
-    gr.Markdown(
-    f"""
-    <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
-        <img src="{logo_data_uri}" alt="goAVA Logo" style="width: 200px; height: auto; margin-bottom: 20px;">
-        <h1>go AVA Dubbing Tool</h1>
-        <p>Synchronize lip movements in a video with a new audio track.</p>
-    </div>
-    """
-    )
-    
-    with gr.Accordion("Notices and Best Practices", open=True):
-        gr.Markdown(
-        """
-        - **Audio/Video Matching:** For best results, select audio and video of similar length. The tool syncs mouth movements to the new audio by matching speech and silence, so a close match is ideal.
-        - **There is currently a limit of 40s of 4k video as longer videos will cause the tool to crash.**
-        - **(Optional) Prepare your video with 25 FPS and audio with 16000 Hz to speed up the processing time.**
-        - **Make sure the file name does not contain any special characters or spaces.**
-        - **You should consider to interpolate the output video to 50 FPS or more to make it smoother. (TODO: implement this in the future)**
-        - **If you encounter any issues, please contact jonathan@goava.ai**
-        """
-        )
-
-    with gr.Row():
-        with gr.Column():
-            gr.Markdown("### Step 1: Upload Source Video")
-            video_input = gr.Video(label="Source Video")
-        with gr.Column():
-            gr.Markdown("### Step 2: Upload Target Audio")
-            audio_input = gr.Audio(label="Target Audio", type="filepath")
-
-    # Add checkpoint selection dropdown logic
-    checkpoint_files_list = get_checkpoint_files()
-    if not checkpoint_files_list:
-        gr.Warning("No checkpoint files (.pt) found. Please add checkpoint files.")
-        dropdown_choices = ["No checkpoints available"]
-        dropdown_default_value = dropdown_choices[0]
-    else:
-        dropdown_choices = checkpoint_files_list
-        preferred_default = "checkpoints/default_unet_v1.5.pt"
-        if preferred_default in dropdown_choices:
-            dropdown_default_value = preferred_default
-        else:
-            dropdown_default_value = dropdown_choices[0]
-
-    with gr.Accordion("Advanced Options & Checkpoint Selection", open=True):
-        with gr.Group():
+    with gr.Tabs():
+        with gr.TabItem("Dubbing Tool"):
             gr.Markdown(
+            f"""
+            <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+                <img src="{logo_data_uri}" alt="goAVA Logo" style="width: 200px; height: auto; margin-bottom: 20px;">
+                <h1>go AVA Dubbing Tool</h1>
+                <p>Synchronize lip movements in a video with a new audio track.</p>
+            </div>
+            """
+            )
+            
+            with gr.Accordion("Notices and Best Practices", open=True):
+                gr.Markdown(
                 """
-                - **Checkpoint Selection:** Use character-specific checkpoints if available (e.g., `debug/unet/character_name/checkpoint-10000.pt`). The number indicates training steps; higher usually means better, but feel free to experiment. 1.5 version checkpoints are for 256 resolution and 1.6 version checkpoints are for 512 resolution. The 1.6 checkpoints provide better quality but are slower to process.
+                - **Audio/Video Matching:** For best results, select audio and video of similar length. The tool syncs mouth movements to the new audio by matching speech and silence, so a close match is ideal.
+                - **There is currently a limit of 40s of 4k video as longer videos will cause the tool to crash.**
+                - **(Optional) Prepare your video with 25 FPS and audio with 16000 Hz to speed up the processing time.**
+                - **Make sure the file name does not contain any special characters or spaces.**
+                - **You should consider to interpolate the output video to 50 FPS or more to make it smoother. (TODO: implement this in the future)**
+                - **If you encounter any issues, please contact jonathan@goava.ai**
                 """
                 )
-            checkpoint_dropdown = gr.Dropdown(
-                choices=dropdown_choices,
-                value=dropdown_default_value,
-                label="UNet Checkpoint",
-            )
-        with gr.Group():
-            gr.Markdown("Select generation resolution. **Ensure your selected checkpoint matches the resolution.**")
-            resolution_input = gr.Radio(
-                [256, 512],
-                value=256,
-                label="Resolution",
-                info="For 1.5 version checkpoints, use 256. For 1.6 version checkpoints, use 512."
-            )
-        with gr.Group():
-            gr.Markdown("Adjust generation parameters.")
+
             with gr.Row():
-                 guidance_scale = gr.Slider(minimum=1.0, maximum=2.5, value=2.5, step=0.1, label="Guidance Scale")
-                 inference_steps = gr.Slider(minimum=10, maximum=50, value=50, step=1, label="Inference Steps")
-            gr.Markdown(
-                """
-                - **Guidance Scale:** Controls how strictly the lip movements follow the audio.
-                - **Inference Steps:** More steps can improve quality but increase processing time.
-                """
-            )
+                with gr.Column():
+                    gr.Markdown("### Step 1: Upload Source Video")
+                    video_input = gr.Video(label="Source Video")
+                with gr.Column():
+                    gr.Markdown("### Step 2: Upload Target Audio")
+                    audio_input = gr.Audio(label="Target Audio", type="filepath")
+
+            # Add checkpoint selection dropdown logic
+            checkpoint_files_list = get_checkpoint_files()
+            if not checkpoint_files_list:
+                gr.Warning("No checkpoint files (.pt) found. Please add checkpoint files.")
+                dropdown_choices = ["No checkpoints available"]
+                dropdown_default_value = dropdown_choices[0]
+            else:
+                dropdown_choices = checkpoint_files_list
+                preferred_default = "checkpoints/default_unet_v1.5.pt"
+                if preferred_default in dropdown_choices:
+                    dropdown_default_value = preferred_default
+                else:
+                    dropdown_default_value = dropdown_choices[0]
+
+            with gr.Accordion("Advanced Options & Checkpoint Selection", open=True):
+                with gr.Group():
+                    gr.Markdown(
+                        """
+                        - **Checkpoint Selection:** Use character-specific checkpoints if available (e.g., `debug/unet/character_name/checkpoint-10000.pt`). The number indicates training steps; higher usually means better, but feel free to experiment. 1.5 version checkpoints are for 256 resolution and 1.6 version checkpoints are for 512 resolution. The 1.6 checkpoints provide better quality but are slower to process.
+                        """
+                        )
+                    checkpoint_dropdown = gr.Dropdown(
+                        choices=dropdown_choices,
+                        value=dropdown_default_value,
+                        label="UNet Checkpoint",
+                    )
+                with gr.Group():
+                    gr.Markdown("Select generation resolution. **Ensure your selected checkpoint matches the resolution.**")
+                    resolution_input = gr.Radio(
+                        [256, 512],
+                        value=256,
+                        label="Resolution",
+                        info="For 1.5 version checkpoints, use 256. For 1.6 version checkpoints, use 512."
+                    )
+                with gr.Group():
+                    gr.Markdown("Adjust generation parameters.")
+                    with gr.Row():
+                         guidance_scale = gr.Slider(minimum=1.0, maximum=2.5, value=2.5, step=0.1, label="Guidance Scale")
+                         inference_steps = gr.Slider(minimum=10, maximum=50, value=50, step=1, label="Inference Steps")
+                    gr.Markdown(
+                        """
+                        - **Guidance Scale:** Controls how strictly the lip movements follow the audio.
+                        - **Inference Steps:** More steps can improve quality but increase processing time.
+                        """
+                    )
+                    with gr.Row():
+                        enable_upscale = gr.Checkbox(value=True, label="Enable Upscale")
+                        sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=7.5, step=0.5, label="Sharpness Factor")
+                    
+                    enable_interpolation = gr.Checkbox(value=True, label="Enable 50 FPS Video Frame Interpolation")
+                    gr.Markdown(
+                        """
+                        - **Enable 50 FPS Interpolation:** Doubles the frame rate of the output video from 25 to 50 FPS using video frame interpolation. This can make motion appear smoother but will increase processing time.
+                        """
+                    )
+
+                    seed = gr.Number(value=1247, label="Random Seed", precision=0)
+                    gr.Markdown(
+                        """
+                        - **Random Seed:** A fixed seed ensures reproducible results for the same inputs.
+                        """
+                    )
+
             with gr.Row():
-                enable_upscale = gr.Checkbox(value=True, label="Enable Upscale")
-                sharpness_factor = gr.Slider(minimum=1.0, maximum=20.0, value=7.5, step=0.5, label="Sharpness Factor")
+                clear_btn = gr.Button("Clear")
+                process_btn = gr.Button("Process Video", variant="primary")
+
+            with gr.Column():
+                gr.Markdown("### Step 3: View Dubbed Video")
+                video_output = gr.Video(label="Output Video")
+
+
+            # --- Button Clicks ---
+            process_btn.click(
+                fn=process_video,
+                inputs=[
+                    video_input,
+                    audio_input,
+                    guidance_scale,
+                    inference_steps,
+                    seed,
+                    enable_upscale,
+                    sharpness_factor,
+                    checkpoint_dropdown,
+                    resolution_input,
+                    enable_interpolation,
+                ],
+                outputs=video_output,
+            )
             
-            enable_interpolation = gr.Checkbox(value=True, label="Enable 50 FPS Video Frame Interpolation")
-            gr.Markdown(
-                """
-                - **Enable 50 FPS Interpolation:** Doubles the frame rate of the output video from 25 to 50 FPS using video frame interpolation. This can make motion appear smoother but will increase processing time.
-                """
+            clear_btn.click(fn=clear_all, inputs=None, outputs=[video_input, audio_input, video_output])
+
+        with gr.TabItem("Results Browser"):
+            gr.Markdown("## Browse and Download Past Results")
+            gr.Markdown("Select a result from the gallery to preview the generated videos. The list is sorted with the most recent results first.")
+            
+            # Invisible textbox to store the session name selected from the gallery
+            selected_session_name = gr.Textbox(visible=False)
+
+            with gr.Row():
+                gallery = gr.Gallery(
+                    label="Past Results",
+                    show_label=False,
+                    elem_id="gallery",
+                    columns=[5], 
+                    object_fit="contain",
+                    height="auto"
+                )
+            
+            with gr.Row():
+                refresh_button = gr.Button("Refresh Results")
+
+            with gr.Row():
+                video_output_browser = gr.Video(label="Result Video", visible=False)
+
+            def get_gallery_data():
+                """Scans the results directory and prepares data for the gallery."""
+                results_dir = script_dir / "results"
+                if not results_dir.exists():
+                    return []
+                
+                sessions = sorted(
+                    [d for d in results_dir.iterdir() if d.is_dir()], 
+                    reverse=True
+                )
+                
+                gallery_items = []
+                for session in sessions:
+                    thumbnail = session / "thumbnail.jpg"
+                    final_video = session / "final_video.mp4"
+
+                    # If thumbnail doesn't exist, try to create it
+                    if not thumbnail.exists() and final_video.exists():
+                        create_thumbnail(final_video, thumbnail)
+
+                    if thumbnail.exists():
+                        gallery_items.append((str(thumbnail), session.name))
+                return gallery_items
+
+            def on_gallery_select(gallery_data: list, evt: gr.SelectData):
+                """Handles the selection of an item in the gallery."""
+                # `evt.index` gives the index of the selected item
+                # `gallery_data` is the list of (filepath, caption) tuples
+                selected_item_caption = gallery_data[evt.index][1]
+                return selected_item_caption
+
+            def refresh_gallery():
+                """Refreshes the gallery with the latest results."""
+                return gr.update(value=get_gallery_data())
+
+            # --- Event Handlers for Results Browser ---
+            demo.load(get_gallery_data, None, gallery)
+
+            refresh_button.click(
+                fn=refresh_gallery,
+                inputs=None,
+                outputs=[gallery]
             )
 
-            seed = gr.Number(value=1247, label="Random Seed", precision=0)
-            gr.Markdown(
-                """
-                - **Random Seed:** A fixed seed ensures reproducible results for the same inputs.
-                """
+            gallery.select(
+                fn=on_gallery_select,
+                inputs=[gallery],
+                outputs=[selected_session_name],
+                show_progress="hidden"
             )
 
-    with gr.Row():
-        clear_btn = gr.Button("Clear")
-        process_btn = gr.Button("Process Video", variant="primary")
-
-    with gr.Column():
-        gr.Markdown("### Step 3: View Dubbed Video")
-        video_output = gr.Video(label="Output Video")
-
-
-    # --- Button Clicks ---
-    process_btn.click(
-        fn=process_video,
-        inputs=[
-            video_input,
-            audio_input,
-            guidance_scale,
-            inference_steps,
-            seed,
-            enable_upscale,
-            sharpness_factor,
-            checkpoint_dropdown,
-            resolution_input,
-            enable_interpolation,
-        ],
-        outputs=video_output,
-    )
-    
-    clear_btn.click(fn=clear_all, inputs=None, outputs=[video_input, audio_input, video_output])
-
+            selected_session_name.change(
+                fn=get_session_video,
+                inputs=[selected_session_name],
+                outputs=[video_output_browser]
+            )
 
 if __name__ == "__main__":
     # --- Authentication ---
