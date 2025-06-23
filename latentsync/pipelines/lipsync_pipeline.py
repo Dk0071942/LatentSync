@@ -686,5 +686,5 @@ class LipsyncPipeline(DiffusionPipeline):
         temp_video_path = os.path.join(temp_dir, "video.mp4")
         write_video(temp_video_path, synced_video_frames, fps=video_fps)
 
-        command = f"ffmpeg -y -loglevel error -nostdin -i \"{temp_video_path}\" -i \"{audio_path}\" -c:v libx264 -preset veryfast -crf 18 -c:a copy -pix_fmt yuv420p -shortest \"{video_out_path}\""
+        command = f"ffmpeg -y -loglevel error -nostdin -i \"{temp_video_path}\" -i \"{audio_path}\" -c:v libx264 -preset veryfast -crf 18 -c:a aac -b:a 192k -pix_fmt yuv420p -shortest \"{video_out_path}\""
         subprocess.run(command, shell=True)
