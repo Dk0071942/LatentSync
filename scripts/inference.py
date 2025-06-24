@@ -14,6 +14,7 @@
 
 import argparse
 import os
+import time
 from pathlib import Path
 from omegaconf import OmegaConf
 import torch
@@ -26,6 +27,7 @@ from DeepCache import DeepCacheSDHelper
 
 
 def main(config, args):
+    start_time = time.time()
     video_path = Path(args.video_path)
     audio_path = Path(args.audio_path)
 
@@ -106,6 +108,8 @@ def main(config, args):
         temp_dir=args.temp_dir,
     )
 
+    end_time = time.time()
+    print(f"Total time taken: {end_time - start_time} seconds")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
