@@ -18,14 +18,14 @@ rife_dir = script_dir / "ECCV2022-RIFE"
 if rife_dir.exists() and str(rife_dir) not in sys.path:
     sys.path.append(str(rife_dir))
 
-# Import the main function from our new script
+# Import the main function from the rife_app package
 try:
-    from run_interpolation import main_interpolate as run_video_interpolation
+    from rife_app.run_interpolation import main_interpolate as run_video_interpolation
 except ImportError as e:
-    print(f"Could not import video interpolation script: {e}")
-    # Define a dummy function to prevent the app from crashing if RIFE is not set up
+    print(f"Could not import video interpolation script from rife_app: {e}")
+    # Define a dummy function to prevent the app from crashing if RIFE is not set up correctly
     def run_video_interpolation(*args, **kwargs):
-        raise RuntimeError("RIFE submodule not found or not set up correctly. Please check the 'ECCV2022-RIFE' directory.")
+        raise RuntimeError("RIFE run_interpolation not found in rife_app. Please check the 'ECCV2022-RIFE/rife_app' directory.")
 
 # --- End RIFE Integration ---
 
