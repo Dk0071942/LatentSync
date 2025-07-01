@@ -32,8 +32,7 @@ RUN mkdir -p /app/checkpoints && \
     [ -f "/app/checkpoints/default_unet_v1.5.pt" ] && \
     [ -f "/app/checkpoints/default_unet_v1.6.pt" ]
 
-EXPOSE 7860 8000
+EXPOSE 8000
 ENV GRADIO_SERVER_NAME="0.0.0.0"
 
-CMD ["python3", "ECCV2022-RIFE/rife_app/app.py"]
 CMD ["python3", "gradio_app.py"]

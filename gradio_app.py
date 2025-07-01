@@ -21,11 +21,14 @@ if rife_dir.exists() and str(rife_dir) not in sys.path:
 # Import the main function from the rife_app package
 try:
     from rife_app.run_interpolation import main_interpolate as run_video_interpolation
+    from rife_app.app import create_rife_ui
 except ImportError as e:
-    print(f"Could not import video interpolation script from rife_app: {e}")
-    # Define a dummy function to prevent the app from crashing if RIFE is not set up correctly
+    print(f"Could not import RIFE components from rife_app: {e}")
+    # Define dummy functions to prevent the app from crashing if RIFE is not set up correctly
     def run_video_interpolation(*args, **kwargs):
-        raise RuntimeError("RIFE run_interpolation not found in rife_app. Please check the 'ECCV2022-RIFE/rife_app' directory.")
+        raise RuntimeError("RIFE run_interpolation not found. Please check the 'ECCV2022-RIFE/rife_app' directory.")
+    def create_rife_ui():
+        gr.Markdown("### RIFE Interface not available\nCould not load RIFE components. Please check the 'ECCV2022-RIFE' submodule installation.")
 
 # --- End RIFE Integration ---
 
@@ -609,6 +612,9 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
                 inputs=[selected_session_name],
                 outputs=[gallery, video_output_browser],
             )
+
+        with gr.TabItem("RIFE Interpolation"):
+            create_rife_ui()
 
 if __name__ == "__main__":
     # --- Authentication ---
