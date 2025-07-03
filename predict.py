@@ -28,12 +28,6 @@ class Predictor(BasePredictor):
         # Soft links for the auxiliary models
         os.system("mkdir -p ~/.cache/torch/hub/checkpoints")
         os.system(
-            "ln -s $(pwd)/checkpoints/auxiliary/2DFAN4-cd938726ad.zip ~/.cache/torch/hub/checkpoints/2DFAN4-cd938726ad.zip"
-        )
-        os.system(
-            "ln -s $(pwd)/checkpoints/auxiliary/s3fd-619a316812.pth ~/.cache/torch/hub/checkpoints/s3fd-619a316812.pth"
-        )
-        os.system(
             "ln -s $(pwd)/checkpoints/auxiliary/vgg16-397923af.pth ~/.cache/torch/hub/checkpoints/vgg16-397923af.pth"
         )
 
@@ -53,7 +47,7 @@ class Predictor(BasePredictor):
         video_path = str(video)
         audio_path = str(audio)
         config_path = "configs/unet/stage2.yaml"
-        ckpt_path = "checkpoints/latentsync_unet.pt"
+        ckpt_path = "checkpoints/default_unet_v1.5.pt"
         output_path = "/tmp/video_out.mp4"
 
         # Run the following command:

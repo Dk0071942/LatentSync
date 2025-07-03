@@ -14,6 +14,8 @@
 
 import argparse
 import os
+import time
+from pathlib import Path
 from omegaconf import OmegaConf
 import torch
 from diffusers import AutoencoderKL, DDIMScheduler
@@ -25,17 +27,21 @@ from DeepCache import DeepCacheSDHelper
 
 
 def main(config, args):
-    if not os.path.exists(args.video_path):
+    start_time = time.time()
+    video_path = Path(args.video_path)
+    audio_path = Path(args.audio_path)
+
+    if not video_path.exists():
         raise RuntimeError(f"Video path '{args.video_path}' not found")
-    if not os.path.exists(args.audio_path):
+    if not audio_path.exists():
         raise RuntimeError(f"Audio path '{args.audio_path}' not found")
 
     # Check if the GPU supports float16
     is_fp16_supported = torch.cuda.is_available() and torch.cuda.get_device_capability()[0] > 7
     dtype = torch.float16 if is_fp16_supported else torch.float32
 
-    print(f"Input video path: {args.video_path}")
-    print(f"Input audio path: {args.audio_path}")
+    print(f"Input video path: {video_path}")
+    print(f"Input audio path: {audio_path}")
     print(f"Loaded checkpoint path: {args.inference_ckpt_path}")
 
     scheduler = DDIMScheduler.from_pretrained("configs")
@@ -74,9 +80,10 @@ def main(config, args):
     ).to("cuda")
 
     # use DeepCache
-    helper = DeepCacheSDHelper(pipe=pipeline)
-    helper.set_params(cache_interval=3, cache_branch_id=0)
-    helper.enable()
+    if args.enable_deepcache:
+        helper = DeepCacheSDHelper(pipe=pipeline)
+        helper.set_params(cache_interval=3, cache_branch_id=0)
+        helper.enable()
 
     if args.seed != -1:
         set_seed(args.seed)
@@ -89,7 +96,6 @@ def main(config, args):
         video_path=args.video_path,
         audio_path=args.audio_path,
         video_out_path=args.video_out_path,
-        video_mask_path=args.video_out_path.replace(".mp4", "_mask.mp4"),
         num_frames=config.data.num_frames,
         num_inference_steps=args.inference_steps,
         guidance_scale=args.guidance_scale,
@@ -99,8 +105,11 @@ def main(config, args):
         mask_image_path=config.data.mask_image_path,
         enable_upscale=args.enable_upscale,
         sharpness_factor=args.sharpness_factor,
+        temp_dir=args.temp_dir,
     )
 
+    end_time = time.time()
+    print(f"Total time taken: {end_time - start_time} seconds")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -111,9 +120,11 @@ if __name__ == "__main__":
     parser.add_argument("--video_out_path", type=str, required=True)
     parser.add_argument("--inference_steps", type=int, default=20)
     parser.add_argument("--guidance_scale", type=float, default=1.0)
+    parser.add_argument("--temp_dir", type=str, default="temp")
     parser.add_argument("--seed", type=int, default=1247)
     parser.add_argument("--enable_upscale", type=bool, default=True)
     parser.add_argument("--sharpness_factor", type=float, default=1.5)
+    parser.add_argument("--enable_deepcache", action="store_true")
     args = parser.parse_args()
 
     config = OmegaConf.load(args.unet_config_path)

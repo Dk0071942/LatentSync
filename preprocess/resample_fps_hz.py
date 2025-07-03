@@ -42,9 +42,9 @@ def get_video_fps(video_path: str):
 def resample_fps_hz(video_input, video_output):
     os.makedirs(os.path.dirname(video_output), exist_ok=True)
     if get_video_fps(video_input) == 25:
-        command = f'''ffmpeg -loglevel error -y -i "{video_input}" -c:v copy -ar 16000 -q:a 0 "{video_output}"'''
+        command = f'''ffmpeg -loglevel error -y -i "{video_input}" -c:v copy -c:a aac -ar 16000 -b:a 192k "{video_output}"'''
     else:
-        command = f'''ffmpeg -loglevel error -y -i "{video_input}" -r 25 -ar 16000 -q:a 0 "{video_output}"'''
+        command = f'''ffmpeg -loglevel error -y -i "{video_input}" -r 25 -c:v libx264 -crf 18 -pix_fmt yuv420p -c:a aac -ar 16000 -b:a 192k "{video_output}"'''
     subprocess.run(command, shell=True)
 
 

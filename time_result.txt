@@ -1,0 +1,15 @@
+LS 5 TEST:
+4K + 21s Audio + custom checkpoint + no upscale + no interpolation:
+Loaded checkpoint path: X:/Github_repo/LatentSync/checkpoints/1.5_REWE_LS_100000steps.pt
+Main inference loop total time: 79.43 seconds
+Total time taken: 172.88005876541138 seconds
+
+1080P + 21s Audio + custom checkpoint + no upscale + no interpolation:
+Loaded checkpoint path: X:/Github_repo/LatentSync/checkpoints/1.5_REWE_LS_100000steps.pt
+Main inference loop total time: 80.12 seconds
+Total time taken: 115.19653034210205 seconds
+
+720P + 21s Audio + custom checkpoint + no upscale + no interpolation:
+Loaded checkpoint path: X:/Github_repo/LatentSync/checkpoints/1.5_REWE_LS_100000steps.pt
+Main inference loop total time: 84.41 seconds
+Total time taken: 110.9520492553711 seconds

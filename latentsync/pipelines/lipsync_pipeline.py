@@ -6,6 +6,7 @@ import os
 import shutil
 from typing import Callable, List, Optional, Union
 import subprocess
+import torch.nn.functional as F
 
 import numpy as np
 import torch
@@ -13,6 +14,7 @@ import torchvision
 from torchvision import transforms
 
 from packaging import version
+import time
 
 from diffusers.configuration_utils import FrozenDict
 from diffusers.models import AutoencoderKL
@@ -92,9 +94,7 @@ class LipsyncPipeline(DiffusionPipeline):
         is_unet_version_less_0_9_0 = hasattr(unet.config, "_diffusers_version") and version.parse(
             version.parse(unet.config._diffusers_version).base_version
         ) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = (
-            hasattr(unet.config, "sample_size") and unet.config.sample_size < 64
-        )
+        is_unet_sample_size_less_64 = hasattr(unet.config, "sample_size") and unet.config.sample_size < 64
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -181,14 +181,14 @@ class LipsyncPipeline(DiffusionPipeline):
                 f" {type(callback_steps)}."
             )
 
-    def prepare_latents(self, batch_size, num_frames, num_channels_latents, height, width, dtype, device, generator):
+    def prepare_latents(self, num_frames, num_channels_latents, height, width, dtype, device, generator):
         shape = (
-            batch_size,
+            1,
             num_channels_latents,
             1,
             height // self.vae_scale_factor,
             width // self.vae_scale_factor,
-        )
+        )  # (b, c, f, h, w)
         rand_device = "cpu" if device.type == "mps" else device
         latents = torch.randn(shape, generator=generator, device=rand_device, dtype=dtype).to(device)
         latents = latents.repeat(1, 1, num_frames, 1, 1)
@@ -449,7 +449,6 @@ class LipsyncPipeline(DiffusionPipeline):
         video_path: str,
         audio_path: str,
         video_out_path: str,
-        video_mask_path: str = None,
         num_frames: int = 16,
         video_fps: int = 25,
         audio_sample_rate: int = 16000,
@@ -462,18 +461,20 @@ class LipsyncPipeline(DiffusionPipeline):
         mask_image_path: str = "latentsync/utils/mask.png",
         enable_upscale: Optional[bool] = True,
         sharpness_factor: Optional[float] = 1,
+        temp_dir: str = "temp",
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
         **kwargs,
     ):
+        call_start_time = time.time()
         is_train = self.unet.training
         self.unet.eval()
 
         check_ffmpeg_installed()
 
         # 0. Define call parameters
-        batch_size = 1
+        setup_start_time = time.time()
         device = self._execution_device
         mask_image = load_fixed_mask(height, mask_image_path)
         self.image_processor = ImageProcessor(height, device="cuda", mask_image=mask_image)
@@ -497,22 +498,31 @@ class LipsyncPipeline(DiffusionPipeline):
 
         # 4. Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+        setup_end_time = time.time()
+        print(f"Pipeline setup time: {setup_end_time - setup_start_time:.2f} seconds")
 
+        data_prepare_start_time = time.time()
         whisper_feature = self.audio_encoder.audio2feat(audio_path)
         whisper_chunks = self.audio_encoder.feature2chunks(feature_array=whisper_feature, fps=video_fps)
 
         audio_samples = read_audio(audio_path)
         video_frames = read_video(video_path, use_decord=False)
+        data_prepare_end_time = time.time()
+        print(f"Audio/Video loading and feature extraction time: {data_prepare_end_time - data_prepare_start_time:.2f} seconds")
 
+        loop_video_start_time = time.time()
         video_frames, faces, boxes, affine_matrices, face_detected_flags = self.loop_video(whisper_chunks, video_frames)
+        loop_video_end_time = time.time()
+        print(f"Video looping and face detection/affine transform time: {loop_video_end_time - loop_video_start_time:.2f} seconds")
+
 
         synced_video_frames = []
 
         num_channels_latents = self.vae.config.latent_channels
 
+        prepare_latents_start_time = time.time()
         # Prepare latent variables
         all_latents = self.prepare_latents(
-            batch_size,
             len(whisper_chunks),
             num_channels_latents,
             height,
@@ -521,12 +531,38 @@ class LipsyncPipeline(DiffusionPipeline):
             device,
             generator,
         )
+        prepare_latents_end_time = time.time()
+        print(f"Initial latents preparation time: {prepare_latents_end_time - prepare_latents_start_time:.2f} seconds")
 
+        inference_loop_start_time = time.time()
         num_inferences = math.ceil(len(whisper_chunks) / num_frames)
         for i in tqdm.tqdm(range(num_inferences), desc="Doing inference..."):
             if self.unet.add_audio_layer:
                 audio_embeds = torch.stack(whisper_chunks[i * num_frames : (i + 1) * num_frames])
                 audio_embeds = audio_embeds.to(device, dtype=weight_dtype)
+                
+                # Get current chunk of faces and flags
+                current_chunk_faces = faces[i * num_frames : (i + 1) * num_frames]
+                current_chunk_flags = face_detected_flags[i * num_frames : (i + 1) * num_frames]
+                
+                # Filter for valid faces in the chunk
+                valid_faces_in_chunk = [face for face, flag in zip(current_chunk_faces, current_chunk_flags) if flag]
+                
+                # If we have valid faces, ensure audio features match their count
+                if valid_faces_in_chunk:
+                    if len(valid_faces_in_chunk) != audio_embeds.shape[0]:
+                        # audio_embeds shape: (frames, seq_len, features)
+                        # permute to (seq_len, features, frames) to interpolate over frames.
+                        audio_embeds_permuted = audio_embeds.permute(1, 2, 0)
+                        audio_embeds_interpolated = F.interpolate(
+                            audio_embeds_permuted,
+                            size=len(valid_faces_in_chunk),
+                            mode="linear",
+                            align_corners=False,
+                        )
+                        # permute back to (frames, seq_len, features)
+                        audio_embeds = audio_embeds_interpolated.permute(2, 0, 1)
+
                 if do_classifier_free_guidance:
                     null_audio_embeds = torch.zeros_like(audio_embeds)
                     audio_embeds = torch.cat([null_audio_embeds, audio_embeds])
@@ -611,9 +647,7 @@ class LipsyncPipeline(DiffusionPipeline):
                     )
 
                     # predict the noise residual
-                    noise_pred = self.unet(
-                        unet_input, t, encoder_hidden_states=audio_embeds
-                    ).sample
+                    noise_pred = self.unet(unet_input, t, encoder_hidden_states=audio_embeds).sample
 
                     # perform guidance
                     if do_classifier_free_guidance:
@@ -641,6 +675,9 @@ class LipsyncPipeline(DiffusionPipeline):
             )
             # Append the result for this chunk (contains only processed frames)
             synced_video_frames.append(decoded_latents)
+        
+        inference_loop_end_time = time.time()
+        print(f"Main inference loop total time: {inference_loop_end_time - inference_loop_start_time:.2f} seconds")
 
         # Filter out None placeholders before concatenating for restore_video
         valid_synced_frames = [f for f in synced_video_frames if f is not None]
@@ -655,23 +692,28 @@ class LipsyncPipeline(DiffusionPipeline):
             # Concatenate results from chunks that had valid faces
             concatenated_frames = torch.cat(valid_synced_frames)
 
+        restore_video_start_time = time.time()
         # Pass potentially None concatenated_frames if no valid frames were processed across all chunks
         synced_video_frames = self.restore_video(concatenated_frames, video_frames, boxes, affine_matrices, face_detected_flags)
+        restore_video_end_time = time.time()
+        print(f"Video restoration time: {restore_video_end_time - restore_video_start_time:.2f} seconds")
 
-        audio_samples_remain_length = int(synced_video_frames.shape[0] / video_fps * audio_sample_rate)
-        audio_samples = audio_samples[:audio_samples_remain_length].cpu().numpy()
 
         if is_train:
             self.unet.train()
 
-        temp_dir = "temp"
+        ffmpeg_start_time = time.time()
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
+        
+        temp_video_path = os.path.join(temp_dir, "video.mp4")
+        write_video(temp_video_path, synced_video_frames, fps=video_fps)
 
-        write_video(os.path.join(temp_dir, "video.mp4"), synced_video_frames, fps=25)
-
-        sf.write(os.path.join(temp_dir, "audio.wav"), audio_samples, audio_sample_rate)
-
-        command = f"ffmpeg -y -loglevel error -nostdin -i \"{os.path.join(temp_dir, 'video.mp4')}\" -i \"{os.path.join(temp_dir, 'audio.wav')}\" -c:v libx264 -crf 18 -c:a aac -q:v 0 -q:a 0 \"{video_out_path}\""
+        command = f"ffmpeg -y -loglevel error -nostdin -i \"{temp_video_path}\" -i \"{audio_path}\" -c:v libx264 -preset veryfast -crf 18 -c:a aac -b:a 192k -pix_fmt yuv420p -shortest \"{video_out_path}\""
         subprocess.run(command, shell=True)
+        ffmpeg_end_time = time.time()
+        print(f"Final video writing and ffmpeg merging time: {ffmpeg_end_time - ffmpeg_start_time:.2f} seconds")
+
+        call_end_time = time.time()
+        print(f"Total __call__ time: {call_end_time - call_start_time:.2f} seconds")

@@ -1,0 +1,3 @@
+[submodule "ECCV2022-RIFE"]
+	path = ECCV2022-RIFE
+	url = https://github.com/DK0071942/ECCV2022-RIFE.git
