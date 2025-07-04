@@ -1,303 +1,277 @@
-# CLAUDE.md
+# Development Partnership
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+We're building production-quality code together. Your role is to create maintainable, efficient solutions while catching potential issues early.
 
-## Project Overview
+When you seem stuck or overly complex, I'll redirect you - my guidance helps you stay on track.
 
-LatentSync is an end-to-end lip-sync method based on audio-conditioned latent diffusion models. It generates lip-synced videos by directly modeling audio-visual correlations in the latent space of Stable Diffusion, without requiring intermediate motion representations.
+## 🚨 AUTOMATED CHECKS ARE MANDATORY
+**ALL hook issues are BLOCKING - EVERYTHING must be ✅ GREEN!**  
+No errors. No formatting issues. No linting problems. Zero tolerance.  
+These are not suggestions. Fix ALL issues before continuing.
 
-## Key Technologies
+## CRITICAL WORKFLOW - ALWAYS FOLLOW THIS!
 
-- **PyTorch 2.7.0** with CUDA 12.1
-- **Diffusers 0.32.2** for diffusion model implementation
-- **Whisper** for audio encoding
-- **Gradio 5.24.0** for web interface
-- **RIFE** (as submodule) for frame interpolation
-- **InsightFace** for face detection
+### Research → Plan → Implement
+**NEVER JUMP STRAIGHT TO CODING!** Always follow this sequence:
+1. **Research**: Explore the codebase, understand existing patterns.
+2. **Plan**: Create a detailed implementation plan and verify it with me  
+3. **Implement**: Execute the plan with validation checkpoints
 
-## Essential Commands
+When asked to implement any feature, you'll first say: "Let me research the codebase and create a plan before implementing."
 
-### Environment Setup
-```bash
-# Complete setup (conda env, dependencies, checkpoints)
-source setup_env.sh
+For complex architectural decisions or challenging problems, use **"ultrathink"** to engage maximum reasoning capacity. Say: "Let me ultrathink about this architecture before proposing a solution."
+
+### USE MULTIPLE AGENTS!
+*Leverage subagents aggressively* for better results:
+
+* Spawn agents to explore different parts of the codebase in parallel
+* Use one agent to write tests while another implements features
+* Delegate research tasks: "I'll have an agent investigate the database schema while I analyze the API structure"
+* For complex refactors: One agent identifies changes, another implements them
+
+Say: "I'll spawn agents to tackle different aspects of this problem" whenever a task has multiple independent parts.
+
+### Reality Checkpoints
+**Stop and validate** at these moments:
+- After implementing a complete feature
+- Before starting a new major component  
+- When something feels wrong
+- Before declaring "done"
+- **WHEN HOOKS FAIL WITH ERRORS** ❌
+
+Run: `make fmt && make test && make lint`
+
+> Why: You can lose track of what's actually working. These checkpoints prevent cascading failures.
+
+### 🚨 CRITICAL: Hook Failures Are BLOCKING
+**When hooks report ANY issues (exit code 2), you MUST:**
+1. **STOP IMMEDIATELY** - Do not continue with other tasks
+2. **FIX ALL ISSUES** - Address every ❌ issue until everything is ✅ GREEN
+3. **VERIFY THE FIX** - Re-run the failed command to confirm it's fixed
+4. **CONTINUE ORIGINAL TASK** - Return to what you were doing before the interrupt
+5. **NEVER IGNORE** - There are NO warnings, only requirements
+
+This includes:
+- Formatting issues (gofmt, black, prettier, etc.)
+- Linting violations (golangci-lint, eslint, etc.)
+- Forbidden patterns (time.Sleep, panic(), interface{})
+- ALL other checks
+
+Your code must be 100% clean. No exceptions.
+
+**Recovery Protocol:**
+- When interrupted by a hook failure, maintain awareness of your original task
+- After fixing all issues and verifying the fix, continue where you left off
+- Use the todo list to track both the fix and your original task
+
+## Working Memory Management
+
+### When context gets long:
+- Re-read this CLAUDE.md file
+- Summarize progress in a PROGRESS.md file
+- Document current state before major changes
+
+### Maintain TODO.md:
+```
+## Current Task
+- [ ] What we're doing RIGHT NOW
+
+## Completed  
+- [x] What's actually done and tested
+
+## Next Steps
+- [ ] What comes next
 ```
 
-### Running Inference
-```bash
-# Web Interface
-python gradio_app.py
+## Go-Specific Rules
 
-# Command Line (with demo files)
-./inference.sh
+### FORBIDDEN - NEVER DO THESE:
+- **NO interface{}** or **any{}** - use concrete types!
+- **NO time.Sleep()** or busy waits - use channels for synchronization!
+- **NO** keeping old and new code together
+- **NO** migration functions or compatibility layers
+- **NO** versioned function names (processV2, handleNew)
+- **NO** custom error struct hierarchies
+- **NO** TODOs in final code
 
-# Custom inference
-python -m scripts.inference \
-    --unet_config_path "configs/unet/stage2_512.yaml" \
-    --inference_ckpt_path "checkpoints/default_unet_v1.5.pt" \
-    --video_path "path/to/video.mp4" \
-    --audio_path "path/to/audio.wav" \
-    --video_out_path "output.mp4"
+> **AUTOMATED ENFORCEMENT**: The smart-lint hook will BLOCK commits that violate these rules.  
+> When you see `❌ FORBIDDEN PATTERN`, you MUST fix it immediately!
+
+### Required Standards:
+- **Delete** old code when replacing it
+- **Meaningful names**: `userID` not `id`
+- **Early returns** to reduce nesting
+- **Concrete types** from constructors: `func NewServer() *Server`
+- **Simple errors**: `return fmt.Errorf("context: %w", err)`
+- **Table-driven tests** for complex logic
+- **Channels for synchronization**: Use channels to signal readiness, not sleep
+- **Select for timeouts**: Use `select` with timeout channels, not sleep loops
+
+## Implementation Standards
+
+### Our code is complete when:
+- ? All linters pass with zero issues
+- ? All tests pass  
+- ? Feature works end-to-end
+- ? Old code is deleted
+- ? Godoc on all exported symbols
+
+### Testing Strategy
+- Complex business logic ? Write tests first
+- Simple CRUD ? Write tests after
+- Hot paths ? Add benchmarks
+- Skip tests for main() and simple CLI parsing
+
+### Project Structure
+```
+cmd/        # Application entrypoints
+internal/   # Private code (the majority goes here)
+pkg/        # Public libraries (only if truly reusable)
 ```
 
-### Training
-```bash
-# Train UNet (configure in configs/unet/*.yaml)
-./train_unet.sh
+## Problem-Solving Together
 
-# Train SyncNet (configure in configs/syncnet/*.yaml)
-./train_syncnet.sh
+When you're stuck or confused:
+1. **Stop** - Don't spiral into complex solutions
+2. **Delegate** - Consider spawning agents for parallel investigation
+3. **Ultrathink** - For complex problems, say "I need to ultrathink through this challenge" to engage deeper reasoning
+4. **Step back** - Re-read the requirements
+5. **Simplify** - The simple solution is usually correct
+6. **Ask** - "I see two approaches: [A] vs [B]. Which do you prefer?"
 
-# Fine-tuning
-./fine_tuning.sh
+My insights on better approaches are valued - please ask for them!
+
+## Performance & Security
+
+### **Measure First**:
+- No premature optimization
+- Benchmark before claiming something is faster
+- Use pprof for real bottlenecks
+
+### **Security Always**:
+- Validate all inputs
+- Use crypto/rand for randomness
+- Prepared statements for SQL (never concatenate!)
+
+## Communication Protocol
+
+### Progress Updates:
+```
+✓ Implemented authentication (all tests passing)
+✓ Added rate limiting  
+✗ Found issue with token expiration - investigating
 ```
 
-### Data Processing
-```bash
-# Full preprocessing pipeline
-./data_processing_pipeline.sh
+### Suggesting Improvements:
+"The current approach works, but I notice [observation].
+Would you like me to [specific improvement]?"
 
-# Generate file lists for training
-python -m tools.write_fileslist
+## Working Together
+
+- This is always a feature branch - no backwards compatibility needed
+- When in doubt, we choose clarity over cleverness
+- **REMINDER**: If this file hasn't been referenced in 30+ minutes, RE-READ IT!
+
+Avoid complex abstractions or "clever" code. The simple, obvious solution is probably better, and my guidance helps you stay focused on what matters.
+
+## Project Understanding Protocol
+
+### Universal Documentation System
+When working on any codebase, maintain a **PROJECT_DOCS.md** file to preserve context across sessions. This prevents repeated analysis and ensures efficient navigation.
+
+### Documentation Structure
+Create PROJECT_DOCS.md with these sections:
+
+#### 1. ARCHITECTURE OVERVIEW
+```markdown
+## System Architecture
+- **Purpose**: [What does this system do?]
+- **Core Approach**: [How does it work at highest level?]
+- **Key Technologies**: [Main tech stack]
+
+## Data Flow
+[Input] → [Processing] → [Output]
+
+## Major Components
+- Component A: [Purpose and location]
+- Component B: [Purpose and location]
 ```
 
-### Evaluation
-```bash
-# Evaluate sync confidence
-./eval/eval_sync_conf.sh
+#### 2. COMPONENT MAP
+```markdown
+## Component Dependencies
+A → B → C (explain relationship)
 
-# Evaluate SyncNet accuracy
-./eval/eval_syncnet_acc.sh
+## Entry Points
+- Main: [file:line] - [purpose]
+- CLI: [file:line] - [purpose]
+- API: [file:line] - [purpose]
+
+## Configuration System
+- Config files: [location and purpose]
+- Environment vars: [key ones]
 ```
 
-### Docker Deployment
-```bash
-# Build and run Docker container
-docker build -t latentsync .
-docker run -p 8000:8000 --gpus all latentsync
+#### 3. KEY PATTERNS
+```markdown
+## Code Patterns
+- Pattern 1: [description] - Example: [file:line]
+- Pattern 2: [description] - Example: [file:line]
+
+## Common Abstractions
+- [Abstraction]: Used for [purpose]
+
+## Anti-patterns to Avoid
+- Don't do X, instead do Y
 ```
 
-## Architecture Overview
+#### 4. NAVIGATION GUIDE
+```markdown
+## Quick Find
+- Feature X implementation: [file:line]
+- Configuration for Y: [file:line]
+- Tests for Z: [file:line]
 
-### Core Components
+## Directory Purposes
+- /src: [what goes here]
+- /lib: [what goes here]
+```
 
-1. **Diffusion Pipeline** (`latentsync/pipelines/`)
-   - Modified UNet3D with audio conditioning via cross-attention
-   - Operates in VAE latent space for efficiency
-   - Supports DeepCache for faster inference
+#### 5. TASK PLAYBOOK
+```markdown
+## Common Tasks
 
-2. **Audio Processing** (`latentsync/whisper/`)
-   - Audio → Melspectrogram → Whisper Encoder → Audio Embeddings
-   - Embeddings integrated into UNet cross-attention layers
+### Adding a new feature
+1. Check [file] for patterns
+2. Modify [component]
+3. Update [config]
 
-3. **Model Architecture** (`latentsync/models/`)
-   - `unet_3d_blocks.py`: Core UNet blocks with temporal layers
-   - `syncnet_model.py`: Lip-sync discriminator
-   - `attention.py`: Custom attention mechanisms
-   - `resnet.py`: Residual blocks with temporal support
+### Debugging issues
+1. Start at [entry point]
+2. Check [logs location]
+3. Common issues: [list]
+```
 
-4. **Loss Functions** (`latentsync/trepa/`)
-   - TREPA loss for temporal consistency
-   - LPIPS for perceptual quality
-   - SyncNet loss for lip-sync accuracy
+### Maintenance Protocol
 
-### Training Strategy
+**When to Update PROJECT_DOCS.md:**
+- After discovering major architectural patterns
+- When completing significant features
+- After resolving complex debugging sessions
+- When you find yourself re-analyzing the same code
 
-- **Stage 1**: Initial training at 256x256 resolution
-- **Stage 2**: Enhanced training with additional temporal layers
-- **512px variants**: Higher resolution for production quality
+**Update Process:**
+1. Add new discoveries to relevant sections
+2. Update file:line references if code moves
+3. Document any gotchas or non-obvious behaviors
+4. Keep it concise - reference code, don't duplicate it
 
-### Key Directories
+### Usage Workflow
 
-- `/configs/`: All configuration files (audio, scheduler, model configs)
-- `/checkpoints/`: Model weights (downloaded by setup_env.sh)
-- `/scripts/`: Main execution scripts for training and inference
-- `/tools/`: Utility scripts for data processing
-- `/preprocess/`: Video preprocessing pipeline components
-- `/eval/`: Evaluation metrics and scripts
-- `/ECCV2022-RIFE/`: Frame interpolation submodule
+1. **Starting work**: Check for PROJECT_DOCS.md first
+2. **If missing**: Create it during initial exploration
+3. **During work**: Reference it instead of re-analyzing
+4. **After changes**: Update affected sections
+5. **Before context switch**: Ensure recent discoveries are documented
 
-## Technical Pipeline Details
-
-### Detailed Pipeline Workflow
-
-1. **Audio Feature Extraction**:
-   - Whisper encoder (tiny: 384-dim, small: 768-dim) extracts features at 50 FPS
-   - Temporal windowing with configurable overlap (default: [2, 2])
-   - Features are cached to disk for efficiency
-   - Audio embeddings fed to UNet via cross-attention
-
-2. **Video Processing**:
-   - Face detection using InsightFace/MediaPipe
-   - Affine transformation normalizes face position/orientation
-   - Fixed 256x256 mouth region masks
-   - Handles missing faces with face_detected_flags
-   - Supports video looping for longer audio
-
-3. **Diffusion Process**:
-   - VAE converts images to 4-channel latents (scale: 0.18215)
-   - UNet input: 13 channels [noisy_latents(4) + mask(1) + masked_image(4) + reference_image(4)]
-   - DDIM scheduler with 20 steps (configurable)
-   - Processes 16 frames per batch
-   - Classifier-free guidance scale: 1.0-3.0
-
-4. **UNet Architecture**:
-   - 3D UNet with channels: [320, 640, 1280, 1280]
-   - Cross-attention layers for audio-visual fusion
-   - FlashAttention-2 via F.scaled_dot_product_attention
-   - Motion modules implemented but unused in final version
-   - Zero-initialized conv_in/conv_out for stability
-
-### Current Optimizations
-
-1. **Performance Optimizations**:
-   - FlashAttention integration for efficient attention computation
-   - DeepCache support (cache_interval: 3, branch_id: 0)
-   - Mixed precision training (FP16 with FP32 fallback)
-   - Gradient checkpointing for memory efficiency
-   - Audio embedding caching
-
-2. **Memory Optimizations**:
-   - Memmap for video restoration
-   - VAE tiling support for large images
-   - Batch size 1 to fit consumer GPUs
-
-### Performance Bottlenecks
-
-1. **Computational Bottlenecks**:
-   - Sequential processing of 16-frame chunks (no parallelization)
-   - Face detection is CPU-bound and sequential
-   - Multiple FFmpeg subprocess calls
-   - Per-frame RealESRGAN upscaling
-
-2. **Memory Bottlenecks**:
-   - 13-channel concatenated tensors
-   - No memory pooling/reuse
-   - Fixed batch size (no dynamic batching)
-   - Large intermediate tensor storage
-
-3. **I/O Bottlenecks**:
-   - Multiple disk writes during processing
-   - Temporary file creation/deletion
-   - No streaming inference
-
-### Potential Quality Improvements
-
-1. **Temporal Consistency**:
-   - Enable motion modules for better temporal coherence
-   - Implement temporal losses (currently unused)
-   - Extend temporal receptive field beyond 16 frames
-   - Add optical flow guidance
-
-2. **Audio-Visual Sync**:
-   - Implement multi-scale temporal alignment
-   - Increase audio context window
-   - Add learnable audio-visual attention
-   - Stronger sync loss weight (currently 0.05)
-
-3. **Visual Quality**:
-   - Implement learned mask generation (adaptive to face shape)
-   - Add adversarial training with discriminator
-   - Multi-resolution training strategy
-   - Better boundary blending for masks
-
-4. **Model Architecture**:
-   - Add skip connections between encoder/decoder
-   - Implement attention mechanisms at multiple scales
-   - Use continuous time embeddings
-   - Add style/identity preservation modules
-
-### Potential Speed Improvements
-
-1. **Parallelization**:
-   ```python
-   # Batch multiple video chunks
-   # Current: process chunks sequentially
-   # Improved: process N chunks in parallel
-   ```
-   - Parallel face detection using multiprocessing
-   - Concurrent audio feature extraction
-   - Batch affine transformations on GPU
-
-2. **Model Optimizations**:
-   - Add torch.compile() for 20-30% speedup
-   - Implement xFormers for additional attention speedup
-   - Use CUDA graphs for static computation
-   - Quantization (INT8/FP8) for inference
-
-3. **Pipeline Optimizations**:
-   - In-memory video processing (avoid disk I/O)
-   - Streaming inference without full video load
-   - KV-cache for cross-attention layers
-   - Reuse face detection across similar frames
-
-4. **Inference Optimizations**:
-   - Reduce DDIM steps (20 → 10-15) with better scheduler
-   - Implement latent consistency models
-   - Use TensorRT for deployment
-   - Add token merging for attention layers
-
-### Technical Limitations
-
-1. **Architecture Constraints**:
-   - Fixed 256x256 processing resolution
-   - 16-frame temporal window limitation
-   - No adaptive computation based on complexity
-   - Limited to frontal/near-frontal faces
-
-2. **Quality Constraints**:
-   - Upscaling artifacts from RealESRGAN
-   - Fixed mask boundaries cause blending issues
-   - No identity preservation guarantees
-   - Sensitive to extreme head poses
-
-3. **Performance Constraints**:
-   - High VRAM requirements (20-55GB)
-   - Sequential processing paradigm
-   - No real-time capability
-   - Limited batch processing support
-
-## Development Guidelines
-
-### Working with Configurations
-- Model configurations are in YAML format under `/configs/`
-- Audio settings: `configs/audio.yaml`
-- Scheduler settings: `configs/scheduler_config.json`
-- Training configs specify model architecture, loss weights, and data paths
-
-### Adding New Features
-- Model modifications go in `latentsync/models/`
-- Pipeline changes in `latentsync/pipelines/`
-- Data processing utilities in `latentsync/utils/`
-- Training scripts should follow the pattern in `/scripts/`
-
-### Memory Requirements
-- Inference: 20-55GB VRAM depending on resolution and batch size
-- Training: 40GB+ VRAM recommended
-- Use `--vram_efficient` flags for consumer GPUs
-
-### Common Issues
-- Ensure CUDA 12.1 compatibility for PyTorch
-- Face detection requires proper mediapipe installation
-- Audio processing needs librosa and correct sample rates
-- RIFE submodule must be initialized for frame interpolation
-
-### Optimization Priorities
-
-**High Priority** (Easy wins, high impact):
-1. Add torch.compile() to UNet and VAE
-2. Implement batched inference for video chunks
-3. Enable xFormers/Flash-3 attention
-4. Add CUDA streams for parallel operations
-
-**Medium Priority** (Moderate effort, good impact):
-1. Implement learned mask generation
-2. Add temporal consistency losses
-3. Use gradient accumulation for larger batches
-4. Implement model quantization
-
-**Low Priority** (High effort or experimental):
-1. Switch to more efficient schedulers (DPM++, UniPC)
-2. Implement progressive resolution training
-3. Add model distillation
-4. Experiment with ControlNet integration
+This system ensures efficient context preservation and reduces repeated analysis across sessions.
