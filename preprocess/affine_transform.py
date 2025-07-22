@@ -46,7 +46,13 @@ def combine_video_audio(video_frames, video_input_path, video_output_path, proce
     subprocess.run(command, shell=True)
 
     os.makedirs(os.path.dirname(video_output_path), exist_ok=True)
-    command = f"ffmpeg -y -loglevel error -i \"{video_temp}\" -i \"{audio_temp}\" -c:v libx264 -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -map 0:v -map 1:a \"{video_output_path}\""
+    # Apply standardized encoding parameters
+    command = (f"ffmpeg -y -loglevel error -i \"{video_temp}\" -i \"{audio_temp}\" "
+               f"-c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p "
+               f"-vf \"format=yuv420p,colorspace=all=bt709:iall=bt709:itrc=bt709:fast=1\" "
+               f"-color_primaries bt709 -color_trc bt709 -colorspace bt709 "
+               f"-movflags +faststart -c:a aac -b:a 192k "
+               f"-map 0:v -map 1:a \"{video_output_path}\"")
     subprocess.run(command, shell=True)
 
     os.remove(audio_temp)

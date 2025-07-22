@@ -710,7 +710,23 @@ class LipsyncPipeline(DiffusionPipeline):
         temp_video_path = os.path.join(temp_dir, "video.mp4")
         write_video(temp_video_path, synced_video_frames, fps=video_fps)
 
-        command = f"ffmpeg -y -loglevel error -nostdin -i \"{temp_video_path}\" -i \"{audio_path}\" -c:v libx264 -preset veryfast -crf 18 -c:a aac -b:a 192k -pix_fmt yuv420p -shortest \"{video_out_path}\""
+        from ..utils.ffmpeg_config import build_standard_command
+        
+        # Build standardized ffmpeg command for final video output
+        # Use fast encoding for better performance in pipeline processing
+        command_parts = [
+            "ffmpeg", "-y", "-loglevel", "error", "-nostdin",
+            "-i", temp_video_path,
+            "-i", audio_path,
+            "-c:v", "libx264", "-preset", "slow", "-crf", "18",
+            "-pix_fmt", "yuv420p", 
+            "-vf", "format=yuv420p,colorspace=all=bt709:iall=bt709:itrc=bt709:fast=1",
+            "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+            "-movflags", "+faststart",
+            "-c:a", "aac", "-b:a", "192k", "-ar", "16000",
+            "-shortest", video_out_path
+        ]
+        command = " ".join(f'"{part}"' if " " in str(part) else str(part) for part in command_parts)
         subprocess.run(command, shell=True)
         ffmpeg_end_time = time.time()
         print(f"Final video writing and ffmpeg merging time: {ffmpeg_end_time - ffmpeg_start_time:.2f} seconds")

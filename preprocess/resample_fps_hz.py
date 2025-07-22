@@ -40,11 +40,22 @@ def get_video_fps(video_path: str):
 
 
 def resample_fps_hz(video_input, video_output):
+    import sys
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+    from latentsync.utils.ffmpeg_config import get_standard_video_params, get_standard_audio_params
+    
     os.makedirs(os.path.dirname(video_output), exist_ok=True)
     if get_video_fps(video_input) == 25:
-        command = f'''ffmpeg -loglevel error -y -i "{video_input}" -c:v copy -c:a aac -ar 16000 -b:a 192k "{video_output}"'''
+        # Video already at 25fps, just copy video and re-encode audio with standard params
+        audio_params = get_standard_audio_params()
+        command_parts = ["ffmpeg", "-loglevel", "error", "-y", "-i", video_input, "-c:v", "copy"] + audio_params + [video_output]
+        command = " ".join(f'"{part}"' if " " in str(part) else str(part) for part in command_parts)
     else:
-        command = f'''ffmpeg -loglevel error -y -i "{video_input}" -r 25 -c:v libx264 -crf 18 -pix_fmt yuv420p -c:a aac -ar 16000 -b:a 192k "{video_output}"'''
+        # Resample to 25fps and apply standard encoding
+        video_params = get_standard_video_params()
+        audio_params = get_standard_audio_params()
+        command_parts = ["ffmpeg", "-loglevel", "error", "-y", "-i", video_input, "-r", "25"] + video_params + audio_params + [video_output]
+        command = " ".join(f'"{part}"' if " " in str(part) else str(part) for part in command_parts)
     subprocess.run(command, shell=True)
 
 

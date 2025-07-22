@@ -116,12 +116,14 @@ def read_audio(audio_path: str, audio_sample_rate: int = 16000):
 
 
 def write_video(video_output_path: str, video_frames: np.ndarray, fps: int):
+    from .ffmpeg_config import get_imageio_params
+    
     with imageio.get_writer(
         video_output_path,
         fps=fps,
         codec="libx264",
         macro_block_size=None,
-        ffmpeg_params=["-preset", "veryfast", "-crf", "13", "-pix_fmt", "yuv420p"],
+        ffmpeg_params=get_imageio_params(),
         ffmpeg_log_level="error",
     ) as writer:
         for video_frame in video_frames:
