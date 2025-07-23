@@ -618,14 +618,20 @@ with gr.Blocks(css=dark_theme_css, title="go AVA Dubbing Tool") as demo:
 
 if __name__ == "__main__":
     # --- Authentication ---
-    # Define username and password directly in the script
-    # !! Warning: Storing credentials directly in code is insecure !!
-    # !! Change these values directly here if needed              !!
-    AUTH_USERNAME = "admin"
-    AUTH_PASSWORD = "goAVA_2025"
+    # Get credentials from environment variables with fallback to defaults
+    # Set these environment variables in your deployment (e.g., Coolify):
+    # - AUTH_USERNAME: Username for authentication
+    # - AUTH_PASSWORD: Password for authentication
+    AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "admin")
+    AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "goAVA_2025")
 
-    auth_creds = (AUTH_USERNAME, AUTH_PASSWORD)
-    print(f"Authentication enabled for user: {AUTH_USERNAME}")
+    # Only enable authentication if both username and password are provided
+    if AUTH_USERNAME and AUTH_PASSWORD:
+        auth_creds = (AUTH_USERNAME, AUTH_PASSWORD)
+        print(f"Authentication enabled for user: {AUTH_USERNAME}")
+    else:
+        auth_creds = None
+        print("Authentication disabled - no credentials configured")
     # --- End Authentication ---
 
     demo.launch(
