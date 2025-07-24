@@ -1,8 +1,15 @@
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
+FROM nvidia/cuda:12.6.1-cudnn-devel-ubuntu22.04
 
 ARG GITHUB_TOKEN
 
-RUN apt-get update && apt-get install -y git ffmpeg libgl1 build-essential python3 python3-pip python3-dev --no-install-recommends \
+# Install FFmpeg 7.1 to match local development environment
+RUN apt-get update && apt-get install -y git wget xz-utils libgl1 libglib2.0-0 libgthread-2.0-0 build-essential python3 python3-pip python3-dev --no-install-recommends \
+    && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz -O /tmp/ffmpeg.tar.xz \
+    && tar -xf /tmp/ffmpeg.tar.xz -C /tmp \
+    && cp /tmp/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg /usr/local/bin/ \
+    && cp /tmp/ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/ \
+    && chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe \
+    && rm -rf /tmp/ffmpeg* \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
