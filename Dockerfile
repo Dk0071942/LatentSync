@@ -35,4 +35,10 @@ RUN mkdir -p /app/checkpoints && \
 EXPOSE 8000
 ENV GRADIO_SERVER_NAME="0.0.0.0"
 
+# Authentication Environment Variables
+# Set to empty strings to disable authentication (default for local development)
+# Override these in deployment to enable authentication
+ENV AUTH_USERNAME=""
+ENV AUTH_PASSWORD=""
+
 CMD ["python3", "gradio_app.py"]

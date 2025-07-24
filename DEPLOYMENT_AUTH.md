@@ -7,8 +7,10 @@ Both the main Gradio app and the RIFE interpolation tool support authentication 
 
 Set these environment variables in your deployment:
 
-- `AUTH_USERNAME`: Username for authentication (default: "admin")
-- `AUTH_PASSWORD`: Password for authentication (default: "goAVA_2025")
+- `AUTH_USERNAME`: Username for authentication (default: "" - disabled)
+- `AUTH_PASSWORD`: Password for authentication (default: "" - disabled)
+
+**Note**: Both applications now default to **disabled authentication** for local development. Authentication is only enabled when both username and password are provided.
 
 ## Coolify Configuration
 
