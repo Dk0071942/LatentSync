@@ -86,14 +86,9 @@ LatentSync uses the [Whisper](https://github.com/openai/whisper) to convert mels
 
 ## 📚 Documentation
 
-For detailed technical information and architectural diagrams:
+📖 **[DOCS.md](DOCS.md)** - **Complete documentation with architecture diagrams, deployment guides, and technical details**
 
-- **[PROJECT_DOCS.md](PROJECT_DOCS.md)** - Comprehensive project documentation with Mermaid diagrams
-- **[ECCV2022-RIFE/ECCV2022-RIFE_DOCS.md](ECCV2022-RIFE/ECCV2022-RIFE_DOCS.md)** - Complete RIFE frame interpolation documentation
-- **[TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md)** - In-depth technical analysis and optimization opportunities
-- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - Complete documentation navigation guide
-- **[docs/framework.png](docs/framework.png)** - Visual framework overview
-- **[docs/syncnet_arch.md](docs/syncnet_arch.md)** - SyncNet architecture details
+*This comprehensive guide includes everything you need: system architecture with Mermaid diagrams, installation, usage, training, evaluation, deployment, and technical specifications.*
 
 ## 🔧 Setting up the Environment
 
